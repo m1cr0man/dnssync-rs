@@ -1,0 +1,46 @@
+[package]
+name = "dnssync-rs"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Dynamic DNS for services and networks."
+
+[dependencies]
+axum = { version = "0.7", features = ["tracing"] }
+cidr = { version = "0.2.3", features = ["serde"] }
+clap = { version = "4.5.16", optional = true, default-features = false, features = [
+    "cargo",
+    "error-context",
+    "help",
+    "std",
+    "usage",
+] }
+config = { version = "0.14", optional = true, default-features = false, features = [
+    "convert-case",
+] }
+env_logger = { version = "0.11", optional = true }
+log = { version = "0.4", optional = true }
+pretty_env_logger = { version = "0.5", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.127"
+snafu = { version = "0.8", features = ["rust_1_65"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio-listener = { version = "0.4.3", optional = true, features = [
+    "axum07",
+    "serde",
+] }
+tracing = "0.1"
+ureq = { version = "2.10.1", features = ["native-certs", "json"] }
+url = { version = "2.5.2", features = ["serde"] }
+uuid = { version = "1.10.0", features = ["v4"] }
+
+[features]
+cli = [
+    "clap",
+    "config",
+    "env_logger",
+    "log",
+    "pretty_env_logger",
+    "tracing/log",
+    "tokio-listener",
+]
