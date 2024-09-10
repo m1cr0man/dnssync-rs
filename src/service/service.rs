@@ -19,14 +19,14 @@ impl DNSSync {
     }
 
     pub fn sync(&mut self) -> Result<()> {
-        let mut domains: Vec<url::Host> = self.backends.iter().map(|b| b.get_domain()).collect();
+        let mut domains: Vec<url::Host> = self.frontends.iter().map(|b| b.get_domain()).collect();
 
         // Sort lexically. Longest domain prefixes will be first.
         domains.sort();
 
         // Map each record to a backend by the longest matching domain.
         let mut authority: Vec<(url::Host, Record)> = Vec::new();
-        for s in self.frontends.iter_mut() {
+        for s in self.backends.iter_mut() {
             for record in s.read_records()? {
                 match domains
                     .iter()
@@ -46,7 +46,7 @@ impl DNSSync {
             }
         }
 
-        for s in self.backends.iter_mut() {
+        for s in self.frontends.iter_mut() {
             let domain = &s.get_domain();
             let mut auth_records = authority
                 .iter()

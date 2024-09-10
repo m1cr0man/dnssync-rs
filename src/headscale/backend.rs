@@ -1,25 +1,25 @@
 use std::str::FromStr;
 
 use crate::common::{
-    Frontend, FrontendSnafu, Record, RequestSnafu, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
+    Backend, BackendSnafu, Record, RequestSnafu, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
 };
 
 use super::models::{Machine, MachinesResponse};
 use snafu::ResultExt;
 
-pub struct HeadscaleFrontend {
+pub struct HeadscaleBackend {
     domain: url::Host,
     api_key: String,
     machines_url: url::Url,
 }
 
-impl HeadscaleFrontend {
+impl HeadscaleBackend {
     fn convert_machine(&self, machine: &Machine) -> Result<Vec<Record>> {
         let mut records = Vec::with_capacity(machine.ip_addresses.len());
         for ip in machine.ip_addresses.iter() {
             let ip_addr = std::net::IpAddr::from_str(&ip)
                 .boxed_local()
-                .context(FrontendSnafu {
+                .context(BackendSnafu {
                     message: format!("Failed to parse ip {}", ip),
                 })?;
 
@@ -39,7 +39,7 @@ impl HeadscaleFrontend {
     }
 }
 
-impl Frontend for HeadscaleFrontend {
+impl Backend for HeadscaleBackend {
     fn read_records(&self) -> Result<Vec<Record>> {
         let response: MachinesResponse = ureq::get(self.machines_url.as_str())
             .set("Authorization", &format!("Bearer {}", self.api_key))
@@ -50,7 +50,7 @@ impl Frontend for HeadscaleFrontend {
             })?
             .into_json()
             .boxed_local()
-            .context(FrontendSnafu {
+            .context(BackendSnafu {
                 message: "Failed to deserialize response",
             })?;
 
@@ -63,7 +63,7 @@ impl Frontend for HeadscaleFrontend {
     }
 }
 
-impl From<super::Config> for HeadscaleFrontend {
+impl From<super::Config> for HeadscaleBackend {
     fn from(mut value: super::Config) -> Self {
         value
             .base_url

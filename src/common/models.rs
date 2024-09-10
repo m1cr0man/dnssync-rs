@@ -16,13 +16,13 @@ impl Record {
     }
 }
 
-pub trait Backend {
+pub trait Frontend {
     fn get_domain(&self) -> url::Host;
     fn read_records(&mut self) -> super::Result<Vec<Record>>;
     fn write_records(&mut self, records: Vec<Record>) -> super::Result<()>;
     fn delete_records(&mut self, records: Vec<Record>) -> super::Result<()>;
 }
 
-pub trait Frontend {
+pub trait Backend {
     fn read_records(&self) -> super::Result<Vec<Record>>;
 }

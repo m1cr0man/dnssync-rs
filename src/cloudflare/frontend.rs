@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
 use snafu::prelude::*;
 
-use crate::common::{Backend, BackendSnafu, Record, RequestSnafu, ResponseSnafu, Result};
+use crate::common::{Frontend, FrontendSnafu, Record, RequestSnafu, ResponseSnafu, Result};
 
 use super::models::{APIError, DNSRecord, PaginatedResponse, WriteResponse, Zone};
 
@@ -26,14 +26,14 @@ fn process_errors(success: bool, errors: Vec<APIError>) -> Result<()> {
     Ok(())
 }
 
-pub struct CloudflareBackend {
+pub struct CloudflareFrontend {
     api_key: String,
     domain: url::Host,
     zone_id: Option<String>,
     dns_records: Vec<DNSRecord>,
 }
 
-impl CloudflareBackend {
+impl CloudflareFrontend {
     fn api_get_paginated<T: DeserializeOwned>(&self, url: &str, per_page: usize) -> Result<Vec<T>> {
         let mut page = 1;
         let mut items: Vec<T> = Vec::new();
@@ -46,7 +46,7 @@ impl CloudflareBackend {
                 .context(RequestSnafu { url, method: "GET" })?
                 .into_json()
                 .boxed_local()
-                .context(BackendSnafu {
+                .context(FrontendSnafu {
                     message: "Failed to deserialize response",
                 })?;
 
@@ -84,7 +84,7 @@ impl CloudflareBackend {
             })?
             .into_json()
             .boxed_local()
-            .context(BackendSnafu {
+            .context(FrontendSnafu {
                 message: "Failed to deserialize response",
             })?;
 
@@ -116,7 +116,7 @@ impl CloudflareBackend {
     }
 }
 
-impl Backend for CloudflareBackend {
+impl Frontend for CloudflareFrontend {
     fn get_domain(&self) -> url::Host {
         return self.domain.to_owned();
     }
@@ -252,7 +252,7 @@ impl Backend for CloudflareBackend {
     }
 }
 
-impl From<super::Config> for CloudflareBackend {
+impl From<super::Config> for CloudflareFrontend {
     fn from(value: super::Config) -> Self {
         Self {
             api_key: value.api_key,

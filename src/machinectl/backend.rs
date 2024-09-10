@@ -1,21 +1,21 @@
 use std::str::FromStr;
 
 use super::models::{Machine, Machines};
-use crate::common::{Frontend, FrontendSnafu, Record, Result, RECORD_KIND_A, RECORD_KIND_AAAA};
+use crate::common::{Backend, BackendSnafu, Record, Result, RECORD_KIND_A, RECORD_KIND_AAAA};
 use snafu::ResultExt;
 
-pub struct MachinectlFrontend {
+pub struct MachinectlBackend {
     domain: url::Host,
     ignored_cidrs: Vec<cidr::IpCidr>,
 }
 
-impl MachinectlFrontend {
+impl MachinectlBackend {
     fn convert_machine(&self, machine: &Machine) -> Result<Vec<Record>> {
         let mut records = Vec::new();
         for ip in machine.addresses.split("\n") {
             let ip_addr = std::net::IpAddr::from_str(ip)
                 .boxed_local()
-                .context(FrontendSnafu {
+                .context(BackendSnafu {
                     message: format!("Failed to parse ip {}", ip),
                 })?;
 
@@ -43,24 +43,24 @@ impl MachinectlFrontend {
     }
 }
 
-impl Frontend for MachinectlFrontend {
+impl Backend for MachinectlBackend {
     fn read_records(&self) -> Result<Vec<Record>> {
         let output = std::process::Command::new("machinectl")
             .args(["list", "-o", "json"])
             .output()
             .boxed_local()
-            .context(FrontendSnafu {
+            .context(BackendSnafu {
                 message: "Failed to run machinectl list",
             })?;
 
         let data: Machines =
             serde_json::from_str(&String::from_utf8(output.stdout).boxed_local().context(
-                FrontendSnafu {
+                BackendSnafu {
                     message: "Failed to decode stdout",
                 },
             )?)
             .boxed_local()
-            .context(FrontendSnafu {
+            .context(BackendSnafu {
                 message: "Failed to parse machinectl list output",
             })?;
 
@@ -73,7 +73,7 @@ impl Frontend for MachinectlFrontend {
     }
 }
 
-impl From<super::Config> for MachinectlFrontend {
+impl From<super::Config> for MachinectlBackend {
     fn from(value: super::Config) -> Self {
         Self {
             domain: value.domain,
