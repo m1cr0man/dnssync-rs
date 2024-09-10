@@ -5,6 +5,7 @@ use crate::common::{Frontend, FrontendSnafu, Record, Result, RECORD_KIND_A, RECO
 use snafu::ResultExt;
 
 pub struct MachinectlFrontend {
+    domain: url::Host,
     ignored_cidrs: Vec<cidr::IpCidr>,
 }
 
@@ -32,7 +33,7 @@ impl MachinectlFrontend {
             };
 
             records.push(Record {
-                name: machine.name.clone(),
+                name: url::Host::Domain(format!("{}.{}", machine.name, self.domain)),
                 kind: kind.to_string(),
                 content: ip.to_string(),
             });
@@ -75,6 +76,7 @@ impl Frontend for MachinectlFrontend {
 impl From<super::Config> for MachinectlFrontend {
     fn from(value: super::Config) -> Self {
         Self {
+            domain: value.domain,
             ignored_cidrs: value.ignored_cidrs.unwrap_or(Vec::new()),
         }
     }

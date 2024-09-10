@@ -16,12 +16,13 @@ pub enum Error {
         message: String,
         source: Box<dyn std::error::Error>,
     },
-    // TODO rename to ResponseSnafu
     #[snafu(display("{message}: {source}"))]
     FrontendError {
         message: String,
         source: Box<dyn std::error::Error>,
     },
+    #[snafu(display("{message}"))]
+    SyncError { message: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

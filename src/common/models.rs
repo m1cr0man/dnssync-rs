@@ -9,12 +9,15 @@ pub struct Record {
 }
 
 impl Record {
+    /// Matches returns whether 2 records are of the same name and kind,
+    /// it does not check the content of the record.
     pub fn matches(&self, other: &Self) -> bool {
         return self.name == other.name && self.kind == other.kind;
     }
 }
 
 pub trait Backend {
+    fn get_domain(&self) -> url::Host;
     fn read_records(&mut self) -> super::Result<Vec<Record>>;
     fn write_records(&mut self, records: Vec<Record>) -> super::Result<()>;
     fn delete_records(&mut self, records: Vec<Record>) -> super::Result<()>;

@@ -8,6 +8,7 @@ use super::models::{Machine, MachinesResponse};
 use snafu::ResultExt;
 
 pub struct HeadscaleFrontend {
+    domain: url::Host,
     api_key: String,
     machines_url: url::Url,
 }
@@ -28,7 +29,7 @@ impl HeadscaleFrontend {
             };
 
             records.push(Record {
-                name: machine.given_name.clone(),
+                name: url::Host::Domain(format!("{}.{}", machine.given_name, self.domain)),
                 kind: kind.to_string(),
                 content: ip.clone(),
             });
@@ -70,6 +71,7 @@ impl From<super::Config> for HeadscaleFrontend {
             .expect("base_url should be a HTTP URL")
             .extend(&["api", "v1", "machine"]);
         Self {
+            domain: value.domain,
             api_key: value.api_key,
             machines_url: value.base_url,
         }

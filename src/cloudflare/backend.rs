@@ -28,7 +28,7 @@ fn process_errors(success: bool, errors: Vec<APIError>) -> Result<()> {
 
 pub struct CloudflareBackend {
     api_key: String,
-    domain: String,
+    domain: url::Host,
     zone_id: Option<String>,
     dns_records: Vec<DNSRecord>,
 }
@@ -103,7 +103,7 @@ impl CloudflareBackend {
         let response: Vec<Zone> = self.api_get_paginated(&url, 50)?;
 
         for zone in response {
-            if zone.name == self.domain {
+            if zone.name == self.domain.to_string() {
                 self.zone_id = Some(zone.id.clone());
                 return Ok(zone.id);
             }
@@ -117,6 +117,10 @@ impl CloudflareBackend {
 }
 
 impl Backend for CloudflareBackend {
+    fn get_domain(&self) -> url::Host {
+        return self.domain.to_owned();
+    }
+
     fn read_records(&mut self) -> Result<Vec<Record>> {
         let zone_id = self.get_zone_id()?;
         let url = format!("{API_BASE_URL}/zones/{zone_id}/dns_records");
@@ -143,7 +147,7 @@ impl Backend for CloudflareBackend {
                     if !existing_record.is_managed() {
                         tracing::warn!(
                             kind = existing_record.kind,
-                            name = existing_record.name,
+                            name = existing_record.name.to_string(),
                             record_id = existing_record.id,
                             "Attempt to override unmanaged record",
                         )
@@ -162,7 +166,7 @@ impl Backend for CloudflareBackend {
             }
         }
 
-        // Write each batch of records
+        // Write each collection of records
         let zone_id = self.get_zone_id()?;
         for record in new {
             let resp: DNSRecord = self.api_write(
@@ -172,7 +176,7 @@ impl Backend for CloudflareBackend {
             )?;
             tracing::info!(
                 kind = resp.kind,
-                name = resp.name,
+                name = resp.name.to_string(),
                 record_id = resp.id,
                 "Created new record",
             )
@@ -186,7 +190,7 @@ impl Backend for CloudflareBackend {
             )?;
             tracing::info!(
                 kind = resp.kind,
-                name = resp.name,
+                name = resp.name.to_string(),
                 record_id = resp.id,
                 "Updated record",
             )
@@ -207,7 +211,7 @@ impl Backend for CloudflareBackend {
                 Some(existing_record) => {
                     tracing::info!(
                         kind = existing_record.kind,
-                        name = existing_record.name,
+                        name = existing_record.name.to_string(),
                         record_id = existing_record.id,
                         "Deleting record",
                     );
@@ -228,18 +232,20 @@ impl Backend for CloudflareBackend {
                     if status > 299 {
                         tracing::info!(
                             kind = existing_record.kind,
-                            name = existing_record.name,
+                            name = existing_record.name.to_string(),
                             record_id = existing_record.id,
                             status = status,
                             "Non-200 response code",
                         );
                     }
                 }
-                None => tracing::error!(
-                    kind = record.kind,
-                    name = record.name,
-                    "Attempt to delete non-existent record",
-                ),
+                None => {
+                    tracing::error!(
+                        kind = record.kind,
+                        name = record.name.to_string(),
+                        "Attempt to delete non-existent record",
+                    );
+                }
             }
         }
         Ok(())

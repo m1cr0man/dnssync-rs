@@ -40,7 +40,7 @@ pub(super) struct Zone {
 pub(super) struct DNSRecord {
     #[serde(rename = "type")]
     pub kind: String,
-    pub name: String,
+    pub name: url::Host,
     pub content: String,
     pub comment: String,
     pub ttl: usize,

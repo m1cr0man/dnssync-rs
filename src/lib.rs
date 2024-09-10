@@ -5,4 +5,4 @@ pub mod headscale;
 pub mod machinectl;
 pub mod service;
 
-pub use confg::*;
+pub use config::*;

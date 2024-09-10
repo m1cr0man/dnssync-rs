@@ -1,9 +1,11 @@
 use clap::{crate_authors, crate_description, crate_version, Arg, ArgAction, Command};
+use pretty_env_logger::env_logger::Builder;
 use std::env;
 use std::io::Write;
-use std::{error::Error, process::exit, thread};
+use std::{error::Error, process::exit};
 
-use crate::service::{Config, DNSSync};
+use crate::service::DNSSync;
+use crate::Config;
 
 fn parse_config<'a, T: serde::Deserialize<'a>>(prefix: &str) -> Result<T, Box<dyn Error>> {
     let cfg_source = config::Config::builder()
@@ -20,11 +22,20 @@ fn parse_config<'a, T: serde::Deserialize<'a>>(prefix: &str) -> Result<T, Box<dy
     })
 }
 
+fn set_logger_level(b: &mut Builder) {
+    let mut b = b;
+    if env::var("RUST_LOG").is_err() {
+        b = b.filter_level(log::LevelFilter::Info)
+    }
+    b.init();
+}
+
 fn setup_logger() {
     // Adapted from env_logger examples. <3 Systemd support
-    let mut builder = match std::env::var("RUST_LOG_STYLE") {
+    match std::env::var("RUST_LOG_STYLE") {
         Ok(s) if s == "SYSTEMD" => {
-            pretty_env_logger::env_logger::builder().format(|buf, record| {
+            let builder = &mut pretty_env_logger::env_logger::builder();
+            builder.format(|buf, record| {
                 writeln!(
                     buf,
                     "<{}>{}: {}",
@@ -38,15 +49,14 @@ fn setup_logger() {
                     record.target(),
                     record.args()
                 )
-            })
+            });
+            set_logger_level(builder);
         }
-        _ => &pretty_env_logger::formatted_builder(),
+        _ => {
+            let builder = &mut pretty_env_logger::formatted_builder();
+            set_logger_level(builder);
+        }
     };
-    // Set a default level
-    if env::var("RUST_LOG").is_err() {
-        builder = builder.filter_level(log::LevelFilter::Info)
-    }
-    builder.init();
 }
 
 pub(crate) fn main() {
@@ -72,36 +82,16 @@ pub(crate) fn main() {
     setup_logger();
 
     let config: Config = parse_config("DNSSYNC").unwrap();
-    let user_opts: tokio_listener::UserOptions = parse_config("MAILFORM_LISTENER").unwrap();
 
     if args.get_flag("check") {
         tracing::info!("Configuration is valid.");
         exit(0);
     }
 
-    let service = DNSSync::from(config.clone());
+    let sync_config = config.sync.clone();
+    let (backends, frontends) = config.into_impls();
 
-    let app = app(&service);
-
-    let handle = thread::spawn(move || service.process_mail());
-
-    // Start the web server
-    let listener = tokio_listener::Listener::bind(
-        &app_config.listener_address,
-        &tokio_listener::SystemOptions::default(),
-        &user_opts,
-    )
-    .await
-    .map_err(|err| {
-        tracing::error!("Failed to configure listener: {}", err);
-        exit(3);
-    })
-    .unwrap();
-
-    tracing::info!("Listening on {}", app_config.listener_address);
-    tokio_listener::axum07::serve(listener, app.into_make_service())
-        .await
+    DNSSync::new(sync_config, backends, frontends)
+        .sync()
         .unwrap();
-
-    handle.join().unwrap();
 }
