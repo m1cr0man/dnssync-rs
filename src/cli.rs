@@ -73,6 +73,13 @@ pub(crate) fn main() {
                 .long("check")
                 .help("Check the configuration"),
         )
+        .arg(
+            Arg::new("dry-run")
+                .action(ArgAction::SetTrue)
+                .short('t')
+                .long("dry-run")
+                .help("Show changes without applying them"),
+        )
         .version(crate_version!())
         .author(crate_authors!("\n"));
 
@@ -87,5 +94,5 @@ pub(crate) fn main() {
         exit(0);
     }
 
-    config.get_service().sync().unwrap();
+    config.get_service().sync(args.get_flag("dry-run")).unwrap();
 }

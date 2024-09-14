@@ -148,17 +148,30 @@ impl Frontend for CloudflareFrontend {
         return self.domain.to_owned();
     }
 
-    fn set_records(&mut self, authority: Vec<Record>) -> Result<()> {
+    fn set_records(&mut self, authority: Vec<Record>, dry_run: bool) -> Result<()> {
         let zone_id = self.get_zone_id()?;
         let current = self.read_records(zone_id.clone())?;
         let diff = diff_records::<DNSRecord>(current, authority);
 
-        // Short circuit
+        // Short circuit on no changes
         let diff_len = diff.len();
         if diff_len == 0 {
             tracing::info!(frontend = FRONTEND_NAME, "No changes detected",);
             return Ok(());
         }
+
+        // Stop on dry run
+        if dry_run {
+            tracing::info!(
+                frontend = FRONTEND_NAME,
+                create = diff.create.len(),
+                update = diff.update.len(),
+                delete = diff.delete.len(),
+                "Dry run completed",
+            );
+            return Ok(());
+        }
+
         tracing::info!(
             frontend = FRONTEND_NAME,
             changes = diff_len,

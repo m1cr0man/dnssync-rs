@@ -18,7 +18,7 @@ impl Matchable for Record {
 
 pub trait Frontend {
     fn get_domain(&self) -> url::Host;
-    fn set_records(&mut self, records: Vec<Record>) -> super::Result<()>;
+    fn set_records(&mut self, records: Vec<Record>, dry_run: bool) -> super::Result<()>;
 }
 
 pub trait Backend {
