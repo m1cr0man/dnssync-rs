@@ -203,6 +203,7 @@
             # Additional dev-shell environment variables can be set directly
             # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
             RUST_SRC_PATH = "${devToolchain}/lib/rustlib/src/rust/library";
+            MEGHAN = "bab";
 
             # Extra inputs can be added here; cargo and rustc are provided by default.
             packages = [

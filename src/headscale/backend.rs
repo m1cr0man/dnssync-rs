@@ -11,6 +11,7 @@ const BACKEND_NAME: &str = "Headscale";
 
 pub struct HeadscaleBackend {
     domain: url::Host,
+    add_user_prefix: bool,
     api_key: String,
     machines_url: url::Url,
 }
@@ -30,8 +31,16 @@ impl HeadscaleBackend {
                 std::net::IpAddr::V6(_) => RECORD_KIND_AAAA,
             };
 
+            let name = match self.add_user_prefix {
+                true => url::Host::Domain(format!(
+                    "{}.{}.{}",
+                    machine.given_name, machine.user.name, self.domain
+                )),
+                false => url::Host::Domain(format!("{}.{}", machine.given_name, self.domain)),
+            };
+
             records.push(Record {
-                name: url::Host::Domain(format!("{}.{}", machine.given_name, self.domain)),
+                name,
                 kind: kind.to_string(),
                 content: ip.clone(),
             });
@@ -80,6 +89,7 @@ impl From<super::Config> for HeadscaleBackend {
             .extend(&["api", "v1", "machine"]);
         Self {
             domain: value.domain,
+            add_user_prefix: value.add_user_prefix,
             api_key: value.api_key,
             machines_url: value.base_url,
         }
