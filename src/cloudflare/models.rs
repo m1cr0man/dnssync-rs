@@ -1,4 +1,4 @@
-use crate::common::Record;
+use crate::common::{Matchable, Record, Updateable};
 
 pub(super) const DNS_RECORD_COMMENT: &str = "Managed by DNSSync";
 
@@ -50,6 +50,25 @@ pub(super) struct DNSRecord {
 impl DNSRecord {
     pub fn is_managed(&self) -> bool {
         return self.comment == DNS_RECORD_COMMENT;
+    }
+}
+
+impl Matchable for DNSRecord {
+    fn matches(&self, other: &Self) -> bool {
+        return self.name == other.name && self.kind == other.kind;
+    }
+}
+
+impl Updateable for DNSRecord {
+    fn update(mut self, authority: Record) -> Self {
+        self.content = authority.content;
+        self
+    }
+}
+
+impl PartialEq for DNSRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.name == other.name && self.content == other.content
     }
 }
 

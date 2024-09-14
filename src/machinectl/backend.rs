@@ -4,6 +4,8 @@ use super::models::{Machine, Machines};
 use crate::common::{Backend, BackendSnafu, Record, Result, RECORD_KIND_A, RECORD_KIND_AAAA};
 use snafu::ResultExt;
 
+const BACKEND_NAME: &str = "Machinectl";
+
 pub struct MachinectlBackend {
     domain: url::Host,
     ignored_cidrs: Vec<cidr::IpCidr>,
@@ -68,6 +70,12 @@ impl Backend for MachinectlBackend {
         for machine in data {
             records.extend(self.convert_machine(&machine)?);
         }
+
+        tracing::info!(
+            backend = BACKEND_NAME,
+            records = records.len(),
+            "Read completed",
+        );
 
         Ok(records)
     }

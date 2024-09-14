@@ -1,15 +1,37 @@
 use serde::de::DeserializeOwned;
 use snafu::prelude::*;
 
-use crate::common::{Frontend, FrontendSnafu, Record, RequestSnafu, ResponseSnafu, Result};
+use crate::common::{
+    diff_records, Frontend, FrontendSnafu, Record, RequestSnafu, ResponseSnafu, Result,
+};
 
 use super::models::{APIError, DNSRecord, PaginatedResponse, WriteResponse, Zone};
 
 const API_BASE_URL: &str = "https://api.cloudflare.com/client/v4";
 
+const FRONTEND_NAME: &str = "Cloudflare";
+
 enum WriteMethod {
     Create,
+    Delete,
     Update,
+}
+
+impl ToString for WriteMethod {
+    fn to_string(&self) -> String {
+        match self {
+            WriteMethod::Create => "Create",
+            WriteMethod::Delete => "Delete",
+            WriteMethod::Update => "Update",
+        }
+        .to_string()
+    }
+}
+
+impl From<WriteMethod> for String {
+    fn from(value: WriteMethod) -> Self {
+        value.to_string()
+    }
 }
 
 fn process_errors(success: bool, errors: Vec<APIError>) -> Result<()> {
@@ -30,7 +52,6 @@ pub struct CloudflareFrontend {
     api_key: String,
     domain: url::Host,
     zone_id: Option<String>,
-    dns_records: Vec<DNSRecord>,
 }
 
 impl CloudflareFrontend {
@@ -43,7 +64,10 @@ impl CloudflareFrontend {
                 .query("per_page", &per_page.to_string())
                 .set("X-Auth-Key", &self.api_key)
                 .call()
-                .context(RequestSnafu { url, method: "GET" })?
+                .context(RequestSnafu {
+                    url,
+                    method: "Read",
+                })?
                 .into_json()
                 .boxed_local()
                 .context(FrontendSnafu {
@@ -73,15 +97,13 @@ impl CloudflareFrontend {
     ) -> Result<T> {
         let req = match method {
             WriteMethod::Create => ureq::post(url),
+            WriteMethod::Delete => ureq::delete(url),
             WriteMethod::Update => ureq::put(url),
         };
         let resp: WriteResponse<T> = req
             .set("X-Auth-Key", &self.api_key)
             .send_json(body)
-            .context(RequestSnafu {
-                url,
-                method: "POST",
-            })?
+            .context(RequestSnafu { url, method })?
             .into_json()
             .boxed_local()
             .context(FrontendSnafu {
@@ -93,7 +115,7 @@ impl CloudflareFrontend {
         Ok(resp.result)
     }
 
-    fn get_zone_id(&mut self) -> Result<String> {
+    pub(super) fn get_zone_id(&mut self) -> Result<String> {
         if let Some(zone_id) = &self.zone_id {
             return Ok(zone_id.clone());
         }
@@ -114,6 +136,11 @@ impl CloudflareFrontend {
         }
         .fail()
     }
+
+    pub(super) fn read_records(&self, zone_id: String) -> Result<Vec<DNSRecord>> {
+        let url = format!("{API_BASE_URL}/zones/{zone_id}/dns_records");
+        self.api_get_paginated(&url, 1000)
+    }
 }
 
 impl Frontend for CloudflareFrontend {
@@ -121,133 +148,70 @@ impl Frontend for CloudflareFrontend {
         return self.domain.to_owned();
     }
 
-    fn read_records(&mut self) -> Result<Vec<Record>> {
+    fn set_records(&mut self, authority: Vec<Record>) -> Result<()> {
         let zone_id = self.get_zone_id()?;
-        let url = format!("{API_BASE_URL}/zones/{zone_id}/dns_records");
-        self.dns_records = self.api_get_paginated(&url, 1000)?;
-        Ok(self
-            .dns_records
-            .iter()
-            .map(|r| Into::<Record>::into(r.clone()))
-            .collect())
-    }
+        let current = self.read_records(zone_id.clone())?;
+        let diff = diff_records::<DNSRecord>(current, authority);
 
-    fn write_records(&mut self, records: Vec<Record>) -> Result<()> {
-        let mut updates: Vec<DNSRecord> = Vec::with_capacity(records.len());
-        let mut new: Vec<DNSRecord> = Vec::with_capacity(records.len());
-
-        let mut exists;
-        for record in records {
-            exists = false;
-            for existing_record in self.dns_records.clone() {
-                // TODO handle case where multiples of the same record exist
-                if existing_record.kind == record.kind && existing_record.name == record.name {
-                    exists = true;
-                    // Check if we are attempting to override an unmanaged record
-                    if !existing_record.is_managed() {
-                        tracing::warn!(
-                            kind = existing_record.kind,
-                            name = existing_record.name.to_string(),
-                            record_id = existing_record.id,
-                            "Attempt to override unmanaged record",
-                        )
-                    }
-                    // Only update if content differs
-                    else if existing_record.content != record.content {
-                        let mut new_record = existing_record.clone();
-                        new_record.content = record.content.clone();
-                        updates.push(new_record);
-                    }
-                }
-            }
-
-            if !exists {
-                new.push(record.into());
-            }
+        // Short circuit
+        let diff_len = diff.len();
+        if diff_len == 0 {
+            tracing::info!(frontend = FRONTEND_NAME, "No changes detected",);
+            return Ok(());
         }
+        tracing::info!(
+            frontend = FRONTEND_NAME,
+            changes = diff_len,
+            "Applying changes",
+        );
 
-        // Write each collection of records
-        let zone_id = self.get_zone_id()?;
-        for record in new {
-            let resp: DNSRecord = self.api_write(
-                &format!("{API_BASE_URL}/zones/{zone_id}/dns_records"),
-                WriteMethod::Create,
-                record,
+        // Write each collection of records.
+        // Deletes first - to avoid any key/unique errors.
+        for record in diff.delete {
+            self.api_write(
+                &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
+                WriteMethod::Delete,
+                record.clone(),
             )?;
             tracing::info!(
-                kind = resp.kind,
-                name = resp.name.to_string(),
-                record_id = resp.id,
-                "Created new record",
-            )
+                frontend = FRONTEND_NAME,
+                kind = record.kind,
+                name = record.name.to_string(),
+                record_id = record.id,
+                "Deleted record",
+            );
         }
 
-        for record in updates {
+        for record in diff.update {
             let resp: DNSRecord = self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Update,
                 record,
             )?;
             tracing::info!(
+                frontend = FRONTEND_NAME,
                 kind = resp.kind,
                 name = resp.name.to_string(),
                 record_id = resp.id,
                 "Updated record",
-            )
+            );
         }
 
-        Ok(())
-    }
-
-    fn delete_records(&mut self, records: Vec<Record>) -> crate::common::Result<()> {
-        let zone_id = self.get_zone_id()?;
-        for record in records {
-            // As a precaution, only delete at most one matching record per execution
-            match self
-                .dns_records
-                .iter()
-                .find(|r| r.is_managed() && r.kind == record.kind && r.name == record.name)
-            {
-                Some(existing_record) => {
-                    tracing::info!(
-                        kind = existing_record.kind,
-                        name = existing_record.name.to_string(),
-                        record_id = existing_record.id,
-                        "Deleting record",
-                    );
-
-                    let url = &format!(
-                        "{API_BASE_URL}/zones/{zone_id}/dns_records/{}",
-                        existing_record.id,
-                    );
-                    let status = ureq::delete(url)
-                        .set("X-Auth-Key", &self.api_key)
-                        .call()
-                        .context(RequestSnafu {
-                            url,
-                            method: "POST",
-                        })?
-                        .status();
-
-                    if status > 299 {
-                        tracing::info!(
-                            kind = existing_record.kind,
-                            name = existing_record.name.to_string(),
-                            record_id = existing_record.id,
-                            status = status,
-                            "Non-200 response code",
-                        );
-                    }
-                }
-                None => {
-                    tracing::error!(
-                        kind = record.kind,
-                        name = record.name.to_string(),
-                        "Attempt to delete non-existent record",
-                    );
-                }
-            }
+        for record in diff.create {
+            let resp: DNSRecord = self.api_write(
+                &format!("{API_BASE_URL}/zones/{zone_id}/dns_records"),
+                WriteMethod::Create,
+                record,
+            )?;
+            tracing::info!(
+                frontend = FRONTEND_NAME,
+                kind = resp.kind,
+                name = resp.name.to_string(),
+                record_id = resp.id,
+                "Created record",
+            );
         }
+
         Ok(())
     }
 }
@@ -258,7 +222,6 @@ impl From<super::Config> for CloudflareFrontend {
             api_key: value.api_key,
             domain: value.domain,
             zone_id: None,
-            dns_records: Vec::default(),
         }
     }
 }

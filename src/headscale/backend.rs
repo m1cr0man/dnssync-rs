@@ -7,6 +7,8 @@ use crate::common::{
 use super::models::{Machine, MachinesResponse};
 use snafu::ResultExt;
 
+const BACKEND_NAME: &str = "Headscale";
+
 pub struct HeadscaleBackend {
     domain: url::Host,
     api_key: String,
@@ -58,6 +60,12 @@ impl Backend for HeadscaleBackend {
         for machine in response.machines {
             records.extend(self.convert_machine(&machine)?);
         }
+
+        tracing::info!(
+            backend = BACKEND_NAME,
+            records = records.len(),
+            "Read completed",
+        );
 
         Ok(records)
     }

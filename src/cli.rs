@@ -4,7 +4,6 @@ use std::env;
 use std::io::Write;
 use std::{error::Error, process::exit};
 
-use crate::service::DNSSync;
 use crate::Config;
 
 fn parse_config<'a, T: serde::Deserialize<'a>>(prefix: &str) -> Result<T, Box<dyn Error>> {
@@ -88,10 +87,5 @@ pub(crate) fn main() {
         exit(0);
     }
 
-    let sync_config = config.sync.clone();
-    let (backends, frontends) = config.into_impls();
-
-    DNSSync::new(sync_config, backends, frontends)
-        .sync()
-        .unwrap();
+    config.get_service().sync().unwrap();
 }
