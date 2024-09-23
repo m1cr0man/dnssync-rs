@@ -29,27 +29,31 @@
             cargoConfig = (builtins.fromTOML (builtins.readFile "${self}/Cargo.toml"));
             pname = cargoConfig.package.name;
           in
-          final: prev: {
-            ${pname} = final.rustPlatform.buildRustPackage {
-              inherit pname;
-              version = cargoConfig.package.version;
-              src = self;
-              buildFeatures = [ "cli" ];
+          final: prev:
+            let
+              craneLib = crane.mkLib prev;
+            in
+            {
+              ${pname} = final.rustPlatform.buildRustPackage {
+                inherit pname;
+                version = cargoConfig.package.version;
+                src = craneLib.cleanCargoSource (craneLib.path self.outPath);
+                buildFeatures = [ "cli" ];
 
-              cargoLock.lockFile = "${self}/Cargo.lock";
+                cargoLock.lockFile = "${self}/Cargo.lock";
 
-              OPENSSL_NO_VENDOR = "1";
-              PKG_CONFIG_PATH = "${final.openssl.dev}/lib/pkgconfig";
-              PKG_CONFIG = "${final.pkg-config}/bin/pkg-config";
+                OPENSSL_NO_VENDOR = "1";
+                PKG_CONFIG_PATH = "${prev.openssl.dev}/lib/pkgconfig";
+                PKG_CONFIG = "${prev.pkg-config}/bin/pkg-config";
 
-              meta = with final.lib; {
-                description = "Dynamic DNS for services and networks";
-                homepage = "https://github.com/m1cr0man/dnssync-rs";
-                license = licenses.mit;
-                maintainers = [ maintainers.m1cr0man ];
+                meta = with prev.lib; {
+                  description = "Dynamic DNS for services and networks";
+                  homepage = "https://github.com/m1cr0man/dnssync-rs";
+                  license = licenses.mit;
+                  maintainers = [ maintainers.m1cr0man ];
+                };
               };
             };
-          };
       };
     } //
     (flake-utils.lib.eachDefaultSystem (system:
@@ -73,7 +77,7 @@
         inherit (pkgs) lib;
 
         craneLib = crane.mkLib pkgs;
-        src = craneLib.cleanCargoSource (craneLib.path "${self}");
+        src = craneLib.cleanCargoSource ./.;
 
         mkToolchain = fenix.packages.${system}.combine;
 
@@ -121,7 +125,7 @@
         # artifacts from above.
         dnssync-rs = craneLibBuild.buildPackage (commonArgs // {
           inherit cargoArtifacts;
-          cargoExtraArgs = "--locked -F cli";
+          cargoExtraArgs = "-F cli";
         });
       in
       {

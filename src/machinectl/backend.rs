@@ -1,13 +1,15 @@
 use std::str::FromStr;
 
 use super::models::{Machine, Machines};
-use crate::common::{Backend, BackendSnafu, Record, Result, RECORD_KIND_A, RECORD_KIND_AAAA};
+use crate::common::{
+    Backend, BackendSnafu, ConfigSnafu, Record, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
+};
 use snafu::ResultExt;
 
 const BACKEND_NAME: &str = "Machinectl";
 
 pub struct MachinectlBackend {
-    domain: url::Host,
+    domain: String,
     ignored_cidrs: Vec<cidr::IpCidr>,
 }
 
@@ -18,6 +20,7 @@ impl MachinectlBackend {
             let ip_addr = std::net::IpAddr::from_str(ip)
                 .boxed_local()
                 .context(BackendSnafu {
+                    backend: BACKEND_NAME,
                     message: format!("Failed to parse ip {}", ip),
                 })?;
 
@@ -52,17 +55,20 @@ impl Backend for MachinectlBackend {
             .output()
             .boxed_local()
             .context(BackendSnafu {
+                backend: BACKEND_NAME,
                 message: "Failed to run machinectl list",
             })?;
 
         let data: Machines =
             serde_json::from_str(&String::from_utf8(output.stdout).boxed_local().context(
                 BackendSnafu {
+                    backend: BACKEND_NAME,
                     message: "Failed to decode stdout",
                 },
             )?)
             .boxed_local()
             .context(BackendSnafu {
+                backend: BACKEND_NAME,
                 message: "Failed to parse machinectl list output",
             })?;
 
@@ -83,9 +89,25 @@ impl Backend for MachinectlBackend {
 
 impl From<super::Config> for MachinectlBackend {
     fn from(value: super::Config) -> Self {
+        // Unfortunately config-rs makes it difficult to mix
+        // strings and vec of strings, so we have to parse ourselves
         Self {
             domain: value.domain,
-            ignored_cidrs: value.ignored_cidrs.unwrap_or(Vec::new()),
+            ignored_cidrs: value
+                .ignored_cidrs
+                .split(",")
+                .map(|v| {
+                    cidr::IpCidr::from_str(v.trim())
+                        .map_err(|_| {
+                            ConfigSnafu {
+                                message: format!("Invalid CIDR {v}"),
+                                prefix: "machinectl.ignored_cidrs",
+                            }
+                            .build()
+                        })
+                        .unwrap()
+                })
+                .collect(),
         }
     }
 }

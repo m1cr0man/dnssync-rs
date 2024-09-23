@@ -10,7 +10,7 @@ use snafu::ResultExt;
 const BACKEND_NAME: &str = "Headscale";
 
 pub struct HeadscaleBackend {
-    domain: url::Host,
+    domain: String,
     add_user_prefix: bool,
     api_key: String,
     machines_url: url::Url,
@@ -23,6 +23,7 @@ impl HeadscaleBackend {
             let ip_addr = std::net::IpAddr::from_str(&ip)
                 .boxed_local()
                 .context(BackendSnafu {
+                    backend: BACKEND_NAME,
                     message: format!("Failed to parse ip {}", ip),
                 })?;
 
@@ -52,6 +53,12 @@ impl HeadscaleBackend {
 
 impl Backend for HeadscaleBackend {
     fn read_records(&self) -> Result<Vec<Record>> {
+        tracing::debug!(
+            url = self.machines_url.as_str(),
+            method = "GET",
+            backend = "headscale",
+            "Sending request"
+        );
         let response: MachinesResponse = ureq::get(self.machines_url.as_str())
             .set("Authorization", &format!("Bearer {}", self.api_key))
             .call()
@@ -62,6 +69,7 @@ impl Backend for HeadscaleBackend {
             .into_json()
             .boxed_local()
             .context(BackendSnafu {
+                backend: BACKEND_NAME,
                 message: "Failed to deserialize response",
             })?;
 

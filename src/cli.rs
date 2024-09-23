@@ -2,24 +2,9 @@ use clap::{crate_authors, crate_description, crate_version, Arg, ArgAction, Comm
 use pretty_env_logger::env_logger::Builder;
 use std::env;
 use std::io::Write;
-use std::{error::Error, process::exit};
+use std::process::exit;
 
 use crate::Config;
-
-fn parse_config<'a, T: serde::Deserialize<'a>>(prefix: &str) -> Result<T, Box<dyn Error>> {
-    let cfg_source = config::Config::builder()
-        .add_source(
-            config::Environment::with_prefix(prefix)
-                .convert_case(config::Case::ScreamingSnake)
-                .try_parsing(true),
-        )
-        .build()?;
-
-    cfg_source.try_deserialize().map_err(|err| {
-        tracing::error!("Error in the provided configuration: {}", err);
-        exit(2);
-    })
-}
 
 fn set_logger_level(b: &mut Builder) {
     let mut b = b;
@@ -69,16 +54,28 @@ pub(crate) fn main() {
         .arg(
             Arg::new("check")
                 .action(ArgAction::SetTrue)
-                .short('c')
-                .long("check")
+                .short('t')
+                .long("test")
                 .help("Check the configuration"),
         )
         .arg(
             Arg::new("dry-run")
                 .action(ArgAction::SetTrue)
-                .short('t')
                 .long("dry-run")
                 .help("Show changes without applying them"),
+        )
+        .arg(
+            Arg::new("backends")
+                .action(ArgAction::Append)
+                .value_delimiter(',')
+                .long("backends")
+                .help("Enabled backends"),
+        )
+        .arg(
+            Arg::new("frontends")
+                .action(ArgAction::Append)
+                .long("frontends")
+                .help("Enabled frontends"),
         )
         .version(crate_version!())
         .author(crate_authors!("\n"));
@@ -87,10 +84,32 @@ pub(crate) fn main() {
 
     setup_logger();
 
-    let config: Config = parse_config("DNSSYNC").unwrap();
+    let config = match Config::with_services(
+        args.get_many("backends")
+            .expect("at least one backend required")
+            .cloned()
+            .collect(),
+        args.get_many("frontends")
+            .expect("at least one frontend required")
+            .cloned()
+            .collect(),
+    )
+    .populate_from_env()
+    {
+        Ok(c) => c,
+        Err(err) => {
+            println!("{err}");
+            exit(2);
+        }
+    };
 
     if args.get_flag("check") {
-        tracing::info!("Configuration is valid.");
+        let (backends, frontends) = config.into_impls();
+        tracing::info!(
+            backends = backends.len(),
+            frontends = frontends.len(),
+            "Configuration is valid."
+        );
         exit(0);
     }
 

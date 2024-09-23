@@ -50,19 +50,30 @@ fn process_errors(success: bool, errors: Vec<APIError>) -> Result<()> {
 
 pub struct CloudflareFrontend {
     api_key: String,
-    domain: url::Host,
+    domain: String,
     zone_id: Option<String>,
 }
 
 impl CloudflareFrontend {
+    fn with_headers(&self, req: ureq::Request) -> ureq::Request {
+        req.set("Authorization", &format!("Bearer {}", self.api_key))
+            .set("Content-Type", "application/json; charset=utf8")
+    }
+
     fn api_get_paginated<T: DeserializeOwned>(&self, url: &str, per_page: usize) -> Result<Vec<T>> {
         let mut page = 1;
         let mut items: Vec<T> = Vec::new();
         loop {
-            let mut resp: PaginatedResponse<T> = ureq::get(url)
+            tracing::debug!(
+                url = url,
+                method = "GET",
+                frontend = "cloudflare",
+                "Sending request"
+            );
+            let mut resp: PaginatedResponse<T> = self
+                .with_headers(ureq::get(url))
                 .query("page", &page.to_string())
                 .query("per_page", &per_page.to_string())
-                .set("X-Auth-Key", &self.api_key)
                 .call()
                 .context(RequestSnafu {
                     url,
@@ -71,6 +82,7 @@ impl CloudflareFrontend {
                 .into_json()
                 .boxed_local()
                 .context(FrontendSnafu {
+                    frontend: FRONTEND_NAME,
                     message: "Failed to deserialize response",
                 })?;
 
@@ -100,13 +112,14 @@ impl CloudflareFrontend {
             WriteMethod::Delete => ureq::delete(url),
             WriteMethod::Update => ureq::put(url),
         };
-        let resp: WriteResponse<T> = req
-            .set("X-Auth-Key", &self.api_key)
+        let resp: WriteResponse<T> = self
+            .with_headers(req)
             .send_json(body)
             .context(RequestSnafu { url, method })?
             .into_json()
             .boxed_local()
             .context(FrontendSnafu {
+                frontend: FRONTEND_NAME,
                 message: "Failed to deserialize response",
             })?;
 
@@ -144,7 +157,7 @@ impl CloudflareFrontend {
 }
 
 impl Frontend for CloudflareFrontend {
-    fn get_domain(&self) -> url::Host {
+    fn get_domain(&self) -> String {
         return self.domain.to_owned();
     }
 
@@ -181,6 +194,9 @@ impl Frontend for CloudflareFrontend {
         // Write each collection of records.
         // Deletes first - to avoid any key/unique errors.
         for record in diff.delete {
+            if !record.is_managed() {
+                continue;
+            }
             self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Delete,

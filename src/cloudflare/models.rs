@@ -40,16 +40,16 @@ pub(super) struct Zone {
 pub(super) struct DNSRecord {
     #[serde(rename = "type")]
     pub kind: String,
-    pub name: url::Host,
+    pub name: String,
     pub content: String,
-    pub comment: String,
+    pub comment: Option<String>,
     pub ttl: usize,
     pub id: String,
 }
 
 impl DNSRecord {
     pub fn is_managed(&self) -> bool {
-        return self.comment == DNS_RECORD_COMMENT;
+        return self.comment == Some(DNS_RECORD_COMMENT.to_string());
     }
 }
 
@@ -76,7 +76,7 @@ impl From<DNSRecord> for Record {
     fn from(value: DNSRecord) -> Self {
         Record {
             kind: value.kind,
-            name: value.name,
+            name: url::Host::Domain(value.name),
             content: value.content,
         }
     }
@@ -86,9 +86,9 @@ impl From<Record> for DNSRecord {
     fn from(value: Record) -> Self {
         Self {
             kind: value.kind,
-            name: value.name,
+            name: value.name.to_string(),
             content: value.content,
-            comment: DNS_RECORD_COMMENT.to_string(),
+            comment: Some(DNS_RECORD_COMMENT.to_string()),
             ttl: 10,
             id: String::new(),
         }
