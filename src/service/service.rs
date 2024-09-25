@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::common::{Backend, Frontend, Record, Result, SyncSnafu};
 
 type Backends = Vec<Box<dyn Backend>>;
@@ -9,7 +11,9 @@ pub struct DNSSync {
 }
 
 impl DNSSync {
-    pub fn new(backends: Backends, frontends: Frontends) -> Self {
+    pub fn new(backends: Backends, mut frontends: Frontends) -> Self {
+        // Sort lexically. Longest domain prefixes will be first.
+        frontends.sort_by_key(|f| f.get_domain());
         Self {
             backends,
             frontends,
@@ -17,42 +21,45 @@ impl DNSSync {
     }
 
     pub fn sync(&mut self, dry_run: bool) -> Result<()> {
-        let mut domains: Vec<String> = self.frontends.iter().map(|b| b.get_domain()).collect();
-
-        // Sort lexically. Longest domain prefixes will be first.
-        domains.sort();
-
-        // Map each record to a backend by the longest matching domain.
-        let mut authority: Vec<(String, Record)> = Vec::new();
+        // Build a mapping of domains to a list of records they should contain.
+        let mut authority: HashMap<String, Vec<Record>> = HashMap::new();
         for backend in self.backends.iter_mut() {
-            for record in backend.read_records()? {
-                match domains
-                    .iter()
-                    .find(|d| record.name.to_string().contains(&d.to_string()))
-                {
-                    Some(domain) => authority.push((domain.to_owned(), record)),
-                    None => {
-                        return SyncSnafu {
-                            message: format!(
-                                "No matching backend domain for record {}",
-                                record.name
-                            ),
-                        }
-                        .fail()
-                    }
+            let domain = backend.get_domain();
+            let records = backend.read_records()?;
+
+            // Create an entry in the authority map, or extend an existing one.
+            match authority.get_mut(&domain) {
+                Some(auth) => {
+                    auth.extend(records.into_iter());
+                }
+                None => {
+                    authority.insert(domain.to_owned(), records);
                 }
             }
         }
 
-        for frontend in self.frontends.iter_mut() {
-            let domain = &frontend.get_domain();
-            let auth_records = authority
-                .clone()
-                .into_iter()
-                .filter_map(|(dom, record)| dom.eq(domain).then_some(record))
-                .collect();
-
-            frontend.set_records(auth_records, dry_run)?;
+        // Now that authority is established, we map each domain to one frontend.
+        for (domain, records) in authority {
+            match self
+                .frontends
+                .iter_mut()
+                .find(|fe| domain.ends_with(&fe.get_domain()))
+            {
+                Some(fe) => {
+                    tracing::debug!(
+                        backend_domain = domain,
+                        frontend_domain = fe.get_domain(),
+                        "Domain mapped"
+                    );
+                    fe.set_records(domain, records, dry_run)?;
+                }
+                None => {
+                    return SyncSnafu {
+                        message: format!("Could not map domain {domain} to any frontend"),
+                    }
+                    .fail();
+                }
+            }
         }
 
         Ok(())

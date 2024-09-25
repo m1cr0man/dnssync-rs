@@ -49,6 +49,10 @@ impl MachinectlBackend {
 }
 
 impl Backend for MachinectlBackend {
+    fn get_domain(&self) -> String {
+        return self.domain.to_owned();
+    }
+
     fn read_records(&self) -> Result<Vec<Record>> {
         let output = std::process::Command::new("machinectl")
             .args(["list", "-o", "json"])

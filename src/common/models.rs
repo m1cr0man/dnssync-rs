@@ -18,10 +18,16 @@ impl Matchable for Record {
 
 pub trait Frontend {
     fn get_domain(&self) -> String;
-    fn set_records(&mut self, records: Vec<Record>, dry_run: bool) -> super::Result<()>;
+    fn set_records(
+        &mut self,
+        domain: String,
+        records: Vec<Record>,
+        dry_run: bool,
+    ) -> super::Result<()>;
 }
 
 pub trait Backend {
+    fn get_domain(&self) -> String;
     fn read_records(&self) -> super::Result<Vec<Record>>;
 }
 

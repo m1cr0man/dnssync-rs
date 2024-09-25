@@ -150,9 +150,13 @@ impl CloudflareFrontend {
         .fail()
     }
 
-    pub(super) fn read_records(&self, zone_id: String) -> Result<Vec<DNSRecord>> {
+    pub(super) fn read_records(&self, zone_id: String, domain: String) -> Result<Vec<DNSRecord>> {
         let url = format!("{API_BASE_URL}/zones/{zone_id}/dns_records");
-        self.api_get_paginated(&url, 1000)
+        let records: Vec<DNSRecord> = self.api_get_paginated(&url, 1000)?;
+        Ok(records
+            .into_iter()
+            .filter(|r| r.name.ends_with(&domain))
+            .collect())
     }
 }
 
@@ -161,9 +165,9 @@ impl Frontend for CloudflareFrontend {
         return self.domain.to_owned();
     }
 
-    fn set_records(&mut self, authority: Vec<Record>, dry_run: bool) -> Result<()> {
+    fn set_records(&mut self, domain: String, authority: Vec<Record>, dry_run: bool) -> Result<()> {
         let zone_id = self.get_zone_id()?;
-        let current = self.read_records(zone_id.clone())?;
+        let current = self.read_records(zone_id.clone(), domain.to_owned())?;
         let diff = diff_records::<DNSRecord>(current, authority);
 
         // Short circuit on no changes
@@ -177,6 +181,7 @@ impl Frontend for CloudflareFrontend {
         if dry_run {
             tracing::info!(
                 frontend = FRONTEND_NAME,
+                domain = domain,
                 create = diff.create.len(),
                 update = diff.update.len(),
                 delete = diff.delete.len(),
