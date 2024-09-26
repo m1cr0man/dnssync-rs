@@ -199,6 +199,17 @@ impl Frontend for CloudflareFrontend {
         // Write each collection of records.
         // Deletes first - to avoid any key/unique errors.
         for record in diff.delete {
+            if !record.in_domain(&domain) {
+                tracing::debug!(
+                    frontend = FRONTEND_NAME,
+                    name = record.name.to_string(),
+                    kind = record.kind,
+                    record_id = record.id,
+                    "Skipping deletion: Not part of this domain"
+                );
+                continue;
+            }
+
             self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Delete,
@@ -213,7 +224,21 @@ impl Frontend for CloudflareFrontend {
             );
         }
 
-        for record in diff.update {
+        for mut record in diff.update {
+            if !record.in_domain(&domain) {
+                tracing::warn!(
+                    frontend = FRONTEND_NAME,
+                    domain = domain,
+                    kind = record.kind,
+                    name = record.name.to_string(),
+                    record_id = record.id,
+                    concat!(
+                        "Updating a record which was previously not a member of this domain.",
+                        " This may mean that a record is defined in multiple backends."
+                    ),
+                );
+            }
+            record.set_domain(&domain);
             let resp: DNSRecord = self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Update,
@@ -228,7 +253,8 @@ impl Frontend for CloudflareFrontend {
             );
         }
 
-        for record in diff.create {
+        for mut record in diff.create {
+            record.set_domain(&domain);
             let resp: DNSRecord = self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records"),
                 WriteMethod::Create,

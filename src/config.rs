@@ -11,6 +11,7 @@ pub struct Config {
     pub cloudflare: Option<crate::cloudflare::Config>,
 
     pub headscale: Option<crate::headscale::Config>,
+    pub jsonfile: Option<crate::jsonfile::Config>,
     pub machinectl: Option<crate::machinectl::Config>,
 }
 
@@ -26,6 +27,10 @@ impl Config {
         if let Some(cfg) = self.headscale {
             backends.push(Box::new(crate::headscale::HeadscaleBackend::from(cfg)));
             tracing::info!(backend = "headscale", "Loaded backend");
+        }
+        if let Some(cfg) = self.jsonfile {
+            backends.push(Box::new(crate::jsonfile::JSONFileBackend::from(cfg)));
+            tracing::info!(backend = "jsonfile", "Loaded backend");
         }
         if let Some(cfg) = self.machinectl {
             backends.push(Box::new(crate::machinectl::MachinectlBackend::from(cfg)));
@@ -49,6 +54,7 @@ impl Config {
             cloudflare: None,
             headscale: None,
             machinectl: None,
+            jsonfile: None,
         }
     }
 
@@ -60,6 +66,9 @@ impl Config {
             match imp.to_lowercase().as_str() {
                 "headscale" => {
                     self.headscale = Some(parse_config(&format!("{ENV_PREFIX}_HEADSCALE"))?)
+                }
+                "jsonfile" => {
+                    self.jsonfile = Some(parse_config(&format!("{ENV_PREFIX}_JSONFILE"))?)
                 }
                 "machinectl" => {
                     self.machinectl = Some(parse_config(&format!("{ENV_PREFIX}_MACHINECTL"))?)

@@ -12,7 +12,11 @@ impl Match for Record {
     /// Matches returns whether 2 records are of the same name and kind,
     /// it does not check the content of the record.
     fn matches(&self, other: &Self) -> bool {
-        return self.name == other.name && self.kind == other.kind;
+        self.kind.eq_ignore_ascii_case(&other.kind)
+            && self
+                .name
+                .to_string()
+                .eq_ignore_ascii_case(&other.name.to_string())
     }
 }
 
