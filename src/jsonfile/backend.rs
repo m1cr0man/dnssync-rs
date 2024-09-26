@@ -4,7 +4,7 @@ use snafu::ResultExt;
 
 use crate::common::{Backend, BackendSnafu, Record, Result};
 
-const BACKEND_NAME: &str = "JSONFile";
+pub(super) const BACKEND_NAME: &str = "JSONFile";
 
 pub struct JSONFileBackend {
     domain: String,
@@ -25,18 +25,17 @@ impl Backend for JSONFileBackend {
             })?;
 
         let reader = BufReader::new(file);
-        let mut records: Vec<Record> =
-            serde_json::from_reader(reader)
-                .boxed_local()
-                .context(BackendSnafu {
-                    backend: BACKEND_NAME,
-                    message: format!("Failed to read records from source"),
-                })?;
+        let records: Vec<super::models::Record> = serde_json::from_reader(reader)
+            .boxed_local()
+            .context(BackendSnafu {
+                backend: BACKEND_NAME,
+                message: format!("Failed to read records from source"),
+            })?;
 
-        // Ensure all the records are correctly cased
-        records.iter_mut().for_each(|record| {
-            record.kind.make_ascii_uppercase();
-        });
+        let records = records
+            .into_iter()
+            .map(|r| r.try_into())
+            .collect::<Result<Vec<Record>>>()?;
 
         tracing::info!(
             backend = BACKEND_NAME,
