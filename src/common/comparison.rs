@@ -1,4 +1,4 @@
-use super::{Matchable, Record, Updateable};
+use super::{Manage, Match, Record, Update};
 
 pub struct DiffResult<R> {
     pub create: Vec<R>,
@@ -12,7 +12,7 @@ impl<R> DiffResult<R> {
     }
 }
 
-pub fn diff_records<R: Clone + Matchable + Updateable + PartialEq + From<Record>>(
+pub fn diff_records<R: Clone + Manage + Match + Update + PartialEq + From<Record>>(
     current: Vec<R>,
     authority: Vec<Record>,
 ) -> DiffResult<R> {
@@ -24,8 +24,16 @@ pub fn diff_records<R: Clone + Matchable + Updateable + PartialEq + From<Record>
         let record_conv: R = record.clone().into();
         match current.iter().find(|r| r.matches(&record_conv)) {
             Some(existing) => {
+                // Check for existing unmanaged record
+                if !existing.is_managed() {
+                    tracing::warn!(
+                        name = record.name.to_string(),
+                        kind = record.kind,
+                        "Skipping update to an unmanaged record"
+                    );
+                }
                 // Only update if content differs
-                if existing != &record_conv {
+                else if existing != &record_conv {
                     update.push(existing.to_owned().update(record));
                 }
             }
@@ -33,15 +41,17 @@ pub fn diff_records<R: Clone + Matchable + Updateable + PartialEq + From<Record>
         }
     });
 
-    current.into_iter().for_each(|record| {
-        match authority
-            .iter()
-            .find(|&r| record.matches(&r.to_owned().into()))
-        {
-            Some(_) => {}
-            None => delete.push(record),
-        }
-    });
+    current
+        .into_iter()
+        .filter(|record| record.is_managed())
+        .for_each(|record| {
+            if let None = authority
+                .iter()
+                .find(|&r| record.matches(&r.to_owned().into()))
+            {
+                delete.push(record);
+            }
+        });
 
     DiffResult {
         create,

@@ -8,7 +8,7 @@ pub struct Record {
     pub content: String,
 }
 
-impl Matchable for Record {
+impl Match for Record {
     /// Matches returns whether 2 records are of the same name and kind,
     /// it does not check the content of the record.
     fn matches(&self, other: &Self) -> bool {
@@ -31,10 +31,14 @@ pub trait Backend {
     fn read_records(&self) -> super::Result<Vec<Record>>;
 }
 
-pub trait Matchable {
+pub trait Match {
     fn matches(&self, other: &Self) -> bool;
 }
 
-pub trait Updateable {
+pub trait Update {
     fn update(self, authority: Record) -> Self;
+}
+
+pub trait Manage {
+    fn is_managed(&self) -> bool;
 }

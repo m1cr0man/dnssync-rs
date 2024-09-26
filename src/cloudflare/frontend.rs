@@ -199,9 +199,6 @@ impl Frontend for CloudflareFrontend {
         // Write each collection of records.
         // Deletes first - to avoid any key/unique errors.
         for record in diff.delete {
-            if !record.is_managed() {
-                continue;
-            }
             self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Delete,
