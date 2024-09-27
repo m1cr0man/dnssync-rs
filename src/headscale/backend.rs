@@ -1,22 +1,22 @@
 use std::str::FromStr;
 
 use crate::common::{
-    Backend, BackendSnafu, Record, RequestSnafu, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
+    self, BackendSnafu, Record, RequestSnafu, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
 };
 
 use super::models::{Machine, MachinesResponse};
 use snafu::ResultExt;
 
-const BACKEND_NAME: &str = "Headscale";
+pub const BACKEND_NAME: &str = "Headscale";
 
-pub struct HeadscaleBackend {
+pub struct Backend {
     domain: String,
     add_user_prefix: bool,
     api_key: String,
     machines_url: url::Url,
 }
 
-impl HeadscaleBackend {
+impl Backend {
     fn convert_machine(&self, machine: &Machine) -> Result<Vec<Record>> {
         let mut records = Vec::with_capacity(machine.ip_addresses.len());
         for ip in machine.ip_addresses.iter() {
@@ -51,7 +51,7 @@ impl HeadscaleBackend {
     }
 }
 
-impl Backend for HeadscaleBackend {
+impl common::Backend for Backend {
     fn get_domain(&self) -> String {
         return self.domain.to_owned();
     }
@@ -92,7 +92,7 @@ impl Backend for HeadscaleBackend {
     }
 }
 
-impl From<super::Config> for HeadscaleBackend {
+impl From<super::Config> for Backend {
     fn from(mut value: super::Config) -> Self {
         value
             .base_url

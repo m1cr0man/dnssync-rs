@@ -2,14 +2,14 @@ use serde::de::DeserializeOwned;
 use snafu::prelude::*;
 
 use crate::common::{
-    diff_records, Frontend, FrontendSnafu, Record, RequestSnafu, ResponseSnafu, Result,
+    self, diff_records, FrontendSnafu, Record, RequestSnafu, ResponseSnafu, Result,
 };
 
-use super::models::{APIError, DNSRecord, PaginatedResponse, WriteResponse, Zone};
+use super::models::{APIError, DNSRecord, DeleteResponse, PaginatedResponse, WriteResponse, Zone};
 
 const API_BASE_URL: &str = "https://api.cloudflare.com/client/v4";
 
-const FRONTEND_NAME: &str = "Cloudflare";
+pub const FRONTEND_NAME: &str = "Cloudflare";
 
 enum WriteMethod {
     Create,
@@ -48,13 +48,13 @@ fn process_errors(success: bool, errors: Vec<APIError>) -> Result<()> {
     Ok(())
 }
 
-pub struct CloudflareFrontend {
+pub struct Cloudflare {
     api_key: String,
     domain: String,
     zone_id: Option<String>,
 }
 
-impl CloudflareFrontend {
+impl Cloudflare {
     fn with_headers(&self, req: ureq::Request) -> ureq::Request {
         req.set("Authorization", &format!("Bearer {}", self.api_key))
             .set("Content-Type", "application/json; charset=utf8")
@@ -160,7 +160,7 @@ impl CloudflareFrontend {
     }
 }
 
-impl Frontend for CloudflareFrontend {
+impl common::Frontend for Cloudflare {
     fn get_domain(&self) -> String {
         return self.domain.to_owned();
     }
@@ -173,7 +173,11 @@ impl Frontend for CloudflareFrontend {
         // Short circuit on no changes
         let diff_len = diff.len();
         if diff_len == 0 {
-            tracing::info!(frontend = FRONTEND_NAME, "No changes detected",);
+            tracing::info!(
+                frontend = FRONTEND_NAME,
+                domain = domain,
+                "No changes detected",
+            );
             return Ok(());
         }
 
@@ -192,7 +196,10 @@ impl Frontend for CloudflareFrontend {
 
         tracing::info!(
             frontend = FRONTEND_NAME,
-            changes = diff_len,
+            domain = domain,
+            create = diff.create.len(),
+            update = diff.update.len(),
+            delete = diff.delete.len(),
             "Applying changes",
         );
 
@@ -200,7 +207,7 @@ impl Frontend for CloudflareFrontend {
         // Deletes first - to avoid any key/unique errors.
         for record in diff.delete {
             if !record.in_domain(&domain) {
-                tracing::debug!(
+                tracing::info!(
                     frontend = FRONTEND_NAME,
                     name = record.name.to_string(),
                     kind = record.kind,
@@ -210,7 +217,7 @@ impl Frontend for CloudflareFrontend {
                 continue;
             }
 
-            self.api_write(
+            self.api_write::<DeleteResponse>(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Delete,
                 record.clone(),
@@ -238,7 +245,16 @@ impl Frontend for CloudflareFrontend {
                     ),
                 );
             }
+
             record.set_domain(&domain);
+            tracing::info!(
+                frontend = FRONTEND_NAME,
+                name = record.name,
+                kind = record.kind,
+                content = record.content,
+                "Updating record"
+            );
+
             let resp: DNSRecord = self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Update,
@@ -255,6 +271,14 @@ impl Frontend for CloudflareFrontend {
 
         for mut record in diff.create {
             record.set_domain(&domain);
+            tracing::info!(
+                frontend = FRONTEND_NAME,
+                name = record.name,
+                kind = record.kind,
+                content = record.content,
+                "Creating record"
+            );
+
             let resp: DNSRecord = self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records"),
                 WriteMethod::Create,
@@ -273,7 +297,7 @@ impl Frontend for CloudflareFrontend {
     }
 }
 
-impl From<super::Config> for CloudflareFrontend {
+impl From<super::Config> for Cloudflare {
     fn from(value: super::Config) -> Self {
         Self {
             api_key: value.api_key,

@@ -41,6 +41,9 @@ pub(super) struct Zone {
     pub id: String,
 }
 
+#[derive(serde::Deserialize)]
+pub(super) struct DeleteResponse {}
+
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub(super) struct DNSRecord {
     #[serde(rename = "type")]
@@ -49,6 +52,8 @@ pub(super) struct DNSRecord {
     pub content: String,
     pub comment: Option<String>,
     pub ttl: usize,
+    // id is used to construct the URL, not part of the body.
+    #[serde(skip_serializing)]
     pub id: String,
 }
 
@@ -76,7 +81,9 @@ impl DNSRecord {
 
 impl Manage for DNSRecord {
     fn is_managed(&self) -> bool {
-        self.comment == Some(COMMENT_WATERMARK.to_string())
+        self.comment
+            .as_ref()
+            .is_some_and(|c| c.contains(COMMENT_WATERMARK))
     }
 }
 
@@ -118,7 +125,7 @@ impl From<Record> for DNSRecord {
             name: value.name.to_string(),
             content: value.content,
             comment: Some(COMMENT_WATERMARK.to_string()),
-            ttl: 10,
+            ttl: 1,
             id: String::new(),
         }
     }

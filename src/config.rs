@@ -1,4 +1,5 @@
 use crate::common::{Backend, Frontend};
+use crate::{cloudflare, headscale, jsonfile, machinectl};
 
 #[cfg(feature = "cli")]
 const ENV_PREFIX: &str = "DNSSYNC";
@@ -8,11 +9,11 @@ pub struct Config {
     backends: Vec<String>,
     frontends: Vec<String>,
 
-    pub cloudflare: Option<crate::cloudflare::Config>,
+    pub cloudflare: Option<cloudflare::Config>,
 
-    pub headscale: Option<crate::headscale::Config>,
-    pub jsonfile: Option<crate::jsonfile::Config>,
-    pub machinectl: Option<crate::machinectl::Config>,
+    pub headscale: Option<headscale::Config>,
+    pub jsonfile: Option<jsonfile::Config>,
+    pub machinectl: Option<machinectl::Config>,
 }
 
 impl Config {
@@ -25,23 +26,23 @@ impl Config {
         let mut backends: Vec<Box<dyn Backend>> = Vec::new();
 
         if let Some(cfg) = self.headscale {
-            backends.push(Box::new(crate::headscale::HeadscaleBackend::from(cfg)));
-            tracing::info!(backend = "headscale", "Loaded backend");
+            backends.push(Box::new(headscale::Backend::from(cfg)));
+            tracing::info!(backend = headscale::BACKEND_NAME, "Loaded backend");
         }
         if let Some(cfg) = self.jsonfile {
-            backends.push(Box::new(crate::jsonfile::JSONFileBackend::from(cfg)));
-            tracing::info!(backend = "jsonfile", "Loaded backend");
+            backends.push(Box::new(jsonfile::Backend::from(cfg)));
+            tracing::info!(backend = jsonfile::BACKEND_NAME, "Loaded backend");
         }
         if let Some(cfg) = self.machinectl {
-            backends.push(Box::new(crate::machinectl::MachinectlBackend::from(cfg)));
-            tracing::info!(backend = "machinectl", "Loaded backend");
+            backends.push(Box::new(machinectl::Machinectl::from(cfg)));
+            tracing::info!(backend = machinectl::BACKEND_NAME, "Loaded backend");
         }
 
         let mut frontends: Vec<Box<dyn Frontend>> = Vec::new();
 
         if let Some(cfg) = self.cloudflare {
-            frontends.push(Box::new(crate::cloudflare::CloudflareFrontend::from(cfg)));
-            tracing::info!(frontend = "cloudflare", "Loaded frontend");
+            frontends.push(Box::new(cloudflare::Cloudflare::from(cfg)));
+            tracing::info!(frontend = cloudflare::FRONTEND_NAME, "Loaded frontend");
         }
 
         (backends, frontends)

@@ -2,16 +2,16 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 
 use snafu::ResultExt;
 
-use crate::common::{Backend, BackendSnafu, Record, Result};
+use crate::common::{self, BackendSnafu, Record, Result};
 
-pub(super) const BACKEND_NAME: &str = "JSONFile";
+pub const BACKEND_NAME: &str = "JSONFile";
 
-pub struct JSONFileBackend {
+pub struct Backend {
     domain: String,
     source: PathBuf,
 }
 
-impl Backend for JSONFileBackend {
+impl common::Backend for Backend {
     fn get_domain(&self) -> String {
         return self.domain.to_owned();
     }
@@ -46,7 +46,7 @@ impl Backend for JSONFileBackend {
     }
 }
 
-impl From<super::Config> for JSONFileBackend {
+impl From<super::Config> for Backend {
     fn from(value: super::Config) -> Self {
         Self {
             domain: value.domain,

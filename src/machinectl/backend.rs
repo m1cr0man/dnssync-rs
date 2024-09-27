@@ -2,18 +2,18 @@ use std::str::FromStr;
 
 use super::models::{Machine, Machines};
 use crate::common::{
-    Backend, BackendSnafu, ConfigSnafu, Record, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
+    self, BackendSnafu, ConfigSnafu, Record, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
 };
 use snafu::ResultExt;
 
-const BACKEND_NAME: &str = "Machinectl";
+pub const BACKEND_NAME: &str = "Machinectl";
 
-pub struct MachinectlBackend {
+pub struct Machinectl {
     domain: String,
     ignored_cidrs: Vec<cidr::IpCidr>,
 }
 
-impl MachinectlBackend {
+impl Machinectl {
     fn convert_machine(&self, machine: &Machine) -> Result<Vec<Record>> {
         let mut records = Vec::new();
         for ip in machine.addresses.split("\n") {
@@ -48,7 +48,7 @@ impl MachinectlBackend {
     }
 }
 
-impl Backend for MachinectlBackend {
+impl common::Backend for Machinectl {
     fn get_domain(&self) -> String {
         return self.domain.to_owned();
     }
@@ -91,7 +91,7 @@ impl Backend for MachinectlBackend {
     }
 }
 
-impl From<super::Config> for MachinectlBackend {
+impl From<super::Config> for Machinectl {
     fn from(value: super::Config) -> Self {
         // Unfortunately config-rs makes it difficult to mix
         // strings and vec of strings, so we have to parse ourselves
