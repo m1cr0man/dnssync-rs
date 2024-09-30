@@ -2,7 +2,8 @@ use serde::de::DeserializeOwned;
 use snafu::prelude::*;
 
 use crate::common::{
-    self, diff_records, FrontendSnafu, Record, RequestSnafu, ResponseSnafu, Result,
+    self, diff_records, key_file_or_string, FrontendSnafu, Record, RequestSnafu, ResponseSnafu,
+    Result,
 };
 
 use super::models::{APIError, DNSRecord, DeleteResponse, PaginatedResponse, WriteResponse, Zone};
@@ -275,8 +276,10 @@ impl common::Frontend for Cloudflare {
 
 impl From<super::Config> for Cloudflare {
     fn from(value: super::Config) -> Self {
+        let api_key = key_file_or_string(value.api_key, FRONTEND_NAME.into()).unwrap();
+
         Self {
-            api_key: value.api_key,
+            api_key,
             domain: value.domain,
             zone_id: None,
         }

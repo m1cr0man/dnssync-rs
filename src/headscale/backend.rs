@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
 use crate::common::{
-    self, BackendSnafu, Record, RequestSnafu, Result, RECORD_KIND_A, RECORD_KIND_AAAA,
+    self, key_file_or_string, BackendSnafu, Record, RequestSnafu, Result, RECORD_KIND_A,
+    RECORD_KIND_AAAA,
 };
 
 use super::models::{Machine, MachinesResponse};
@@ -96,10 +97,13 @@ impl From<super::Config> for Backend {
             .path_segments_mut()
             .expect("base_url should be a HTTP URL")
             .extend(&["api", "v1", "machine"]);
+
+        let api_key = key_file_or_string(value.api_key, BACKEND_NAME.into()).unwrap();
+
         Self {
             domain: value.domain,
             add_user_suffix: value.add_user_suffix,
-            api_key: value.api_key,
+            api_key,
             machines_url: value.base_url,
         }
     }

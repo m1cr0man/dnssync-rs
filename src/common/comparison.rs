@@ -1,6 +1,6 @@
 use super::{Manage, Match, Record, Update};
 
-pub struct DiffResult<R> {
+pub(crate) struct DiffResult<R> {
     pub create: Vec<R>,
     pub update: Vec<R>,
     pub delete: Vec<R>,
@@ -12,7 +12,7 @@ impl<R> DiffResult<R> {
     }
 }
 
-pub fn diff_records<R: Clone + Manage + Match + Update + PartialEq + From<Record>>(
+pub(crate) fn diff_records<R: Clone + Manage + Match + Update + PartialEq + From<Record>>(
     current: Vec<R>,
     authority: Vec<Record>,
 ) -> DiffResult<R> {
