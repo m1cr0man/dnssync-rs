@@ -11,7 +11,7 @@ pub const BACKEND_NAME: &str = "Headscale";
 
 pub struct Backend {
     domain: String,
-    add_user_prefix: bool,
+    add_user_suffix: bool,
     api_key: String,
     machines_url: url::Url,
 }
@@ -32,7 +32,7 @@ impl Backend {
                 std::net::IpAddr::V6(_) => RECORD_KIND_AAAA,
             };
 
-            let name = match self.add_user_prefix {
+            let name = match self.add_user_suffix {
                 true => url::Host::Domain(format!(
                     "{}.{}.{}",
                     machine.given_name, machine.user.name, self.domain
@@ -98,7 +98,7 @@ impl From<super::Config> for Backend {
             .extend(&["api", "v1", "machine"]);
         Self {
             domain: value.domain,
-            add_user_prefix: value.add_user_prefix,
+            add_user_suffix: value.add_user_suffix,
             api_key: value.api_key,
             machines_url: value.base_url,
         }
