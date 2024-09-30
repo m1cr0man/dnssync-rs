@@ -55,6 +55,58 @@
               };
             };
       };
+
+      nixosModules.dnssync = { config, pkgs, lib, ... }:
+        let
+          inherit (lib) types mkOption;
+          cfg = config.dnssync;
+          esa = lib.escapeShellArg;
+        in
+        {
+          options.dnssync = {
+            enable = lib.mkEnableOption "dynamic DNS for services and networks";
+            backends = mkOption {
+              type = types.commas;
+              description = "Enabled backend implementations, comma separated";
+            };
+            frontends = mkOption {
+              type = types.commas;
+              description = "Enabled frontend implementations, comma separated";
+            };
+          };
+
+          config = lib.mkIf cfg.enable {
+            imports = [
+              "${self}/src/cloudflare/default.nix"
+              "${self}/src/headscale/default.nix"
+              "${self}/src/jsonfile/default.nix"
+              "${self}/src/machinectl/default.nix"
+            ];
+
+            users.users.dnssync = {
+              group = "dnssync";
+              home = "/var/empty";
+              createHome = false;
+              isSystemUser = true;
+            };
+            users.groups.dnssync = { };
+
+            systemd.services.dnssync = {
+              inherit (self) description;
+              after = [ "network-online.target" ];
+              wantedBy = [ "multi-user.target" ];
+              serviceConfig = {
+                ExecStart = "${pkgs.dnssync-rs}/bin/dnssync-rs --backends ${esa cfg.backends} --frontends ${esa cfg.frontends}";
+                Type = "oneshot";
+                RemainAfterExit = "no";
+                User = "dnssync";
+                Group = "dnssync";
+                ProtectSystem = "full";
+                PrivateTmp = "yes";
+              };
+            };
+          };
+        };
     } //
     (flake-utils.lib.eachDefaultSystem (system:
       let
