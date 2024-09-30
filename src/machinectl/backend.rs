@@ -41,6 +41,7 @@ impl Machinectl {
                 name: url::Host::Domain(format!("{}.{}", machine.name, self.domain)),
                 kind: kind.to_string(),
                 content: ip.to_string(),
+                source: BACKEND_NAME.to_string(),
             });
         }
 

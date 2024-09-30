@@ -32,6 +32,7 @@ impl common::Backend for Backend {
                 message: format!("Failed to read records from source"),
             })?;
 
+        // Convert between jsonfile::Record and common::Record
         let records = records
             .into_iter()
             .map(|r| r.try_into())

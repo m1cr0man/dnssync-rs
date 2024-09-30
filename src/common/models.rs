@@ -6,6 +6,7 @@ pub struct Record {
     pub name: url::Host,
     pub kind: String,
     pub content: String,
+    pub source: String,
 }
 
 impl Match for Record {
@@ -22,12 +23,7 @@ impl Match for Record {
 
 pub trait Frontend {
     fn get_domain(&self) -> String;
-    fn set_records(
-        &mut self,
-        domain: String,
-        records: Vec<Record>,
-        dry_run: bool,
-    ) -> super::Result<()>;
+    fn set_records(&mut self, records: Vec<Record>, dry_run: bool) -> super::Result<()>;
 }
 
 pub trait Backend {

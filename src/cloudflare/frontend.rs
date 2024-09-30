@@ -150,13 +150,10 @@ impl Cloudflare {
         .fail()
     }
 
-    pub(super) fn read_records(&self, zone_id: String, domain: String) -> Result<Vec<DNSRecord>> {
+    pub(super) fn read_records(&self, zone_id: String) -> Result<Vec<DNSRecord>> {
         let url = format!("{API_BASE_URL}/zones/{zone_id}/dns_records");
         let records: Vec<DNSRecord> = self.api_get_paginated(&url, 1000)?;
-        Ok(records
-            .into_iter()
-            .filter(|r| r.name.ends_with(&domain))
-            .collect())
+        Ok(records.into_iter().collect())
     }
 }
 
@@ -165,19 +162,15 @@ impl common::Frontend for Cloudflare {
         return self.domain.to_owned();
     }
 
-    fn set_records(&mut self, domain: String, authority: Vec<Record>, dry_run: bool) -> Result<()> {
+    fn set_records(&mut self, authority: Vec<Record>, dry_run: bool) -> Result<()> {
         let zone_id = self.get_zone_id()?;
-        let current = self.read_records(zone_id.clone(), domain.to_owned())?;
+        let current = self.read_records(zone_id.clone())?;
         let diff = diff_records::<DNSRecord>(current, authority);
 
         // Short circuit on no changes
         let diff_len = diff.len();
         if diff_len == 0 {
-            tracing::info!(
-                frontend = FRONTEND_NAME,
-                domain = domain,
-                "No changes detected",
-            );
+            tracing::info!(frontend = FRONTEND_NAME, "No changes detected",);
             return Ok(());
         }
 
@@ -185,7 +178,6 @@ impl common::Frontend for Cloudflare {
         if dry_run {
             tracing::info!(
                 frontend = FRONTEND_NAME,
-                domain = domain,
                 create = diff.create.len(),
                 update = diff.update.len(),
                 delete = diff.delete.len(),
@@ -196,7 +188,6 @@ impl common::Frontend for Cloudflare {
 
         tracing::info!(
             frontend = FRONTEND_NAME,
-            domain = domain,
             create = diff.create.len(),
             update = diff.update.len(),
             delete = diff.delete.len(),
@@ -206,52 +197,36 @@ impl common::Frontend for Cloudflare {
         // Write each collection of records.
         // Deletes first - to avoid any key/unique errors.
         for record in diff.delete {
-            if !record.in_domain(&domain) {
-                tracing::info!(
-                    frontend = FRONTEND_NAME,
-                    name = record.name.to_string(),
-                    kind = record.kind,
-                    record_id = record.id,
-                    "Skipping deletion: Not part of this domain"
-                );
-                continue;
-            }
+            tracing::info!(
+                frontend = FRONTEND_NAME,
+                kind = record.kind,
+                name = record.name,
+                record_id = record.id,
+                "Deleting record",
+            );
 
             self.api_write::<DeleteResponse>(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
                 WriteMethod::Delete,
                 record.clone(),
             )?;
-            tracing::info!(
+
+            tracing::debug!(
                 frontend = FRONTEND_NAME,
                 kind = record.kind,
-                name = record.name.to_string(),
+                name = record.name,
                 record_id = record.id,
                 "Deleted record",
             );
         }
 
-        for mut record in diff.update {
-            if !record.in_domain(&domain) {
-                tracing::warn!(
-                    frontend = FRONTEND_NAME,
-                    domain = domain,
-                    kind = record.kind,
-                    name = record.name.to_string(),
-                    record_id = record.id,
-                    concat!(
-                        "Updating a record which was previously not a member of this domain.",
-                        " This may mean that a record is defined in multiple backends."
-                    ),
-                );
-            }
-
-            record.set_domain(&domain);
+        for record in diff.update {
             tracing::info!(
                 frontend = FRONTEND_NAME,
                 name = record.name,
                 kind = record.kind,
                 content = record.content,
+                record_id = record.id,
                 "Updating record"
             );
 
@@ -260,17 +235,17 @@ impl common::Frontend for Cloudflare {
                 WriteMethod::Update,
                 record,
             )?;
-            tracing::info!(
+
+            tracing::debug!(
                 frontend = FRONTEND_NAME,
                 kind = resp.kind,
-                name = resp.name.to_string(),
+                name = resp.name,
                 record_id = resp.id,
                 "Updated record",
             );
         }
 
-        for mut record in diff.create {
-            record.set_domain(&domain);
+        for record in diff.create {
             tracing::info!(
                 frontend = FRONTEND_NAME,
                 name = record.name,
@@ -284,10 +259,11 @@ impl common::Frontend for Cloudflare {
                 WriteMethod::Create,
                 record,
             )?;
-            tracing::info!(
+
+            tracing::debug!(
                 frontend = FRONTEND_NAME,
                 kind = resp.kind,
-                name = resp.name.to_string(),
+                name = resp.name,
                 record_id = resp.id,
                 "Created record",
             );

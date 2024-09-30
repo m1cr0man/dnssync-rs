@@ -44,6 +44,7 @@ impl Backend {
                 name,
                 kind: kind.to_string(),
                 content: ip.clone(),
+                source: BACKEND_NAME.to_string(),
             });
         }
 

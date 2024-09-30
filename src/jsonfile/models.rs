@@ -25,6 +25,7 @@ impl TryFrom<Record> for crate::common::Record {
             name,
             kind: value.kind.to_uppercase(),
             content: value.content,
+            source: BACKEND_NAME.to_string(),
         })
     }
 }

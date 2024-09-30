@@ -1,11 +1,6 @@
 use crate::common::{Manage, Match, Record, Update};
 
 pub(super) const COMMENT_WATERMARK: &str = "Managed by DNSSync.";
-pub(super) const COMMENT_KEY_DOMAIN: &str = "sync_domain:";
-
-fn domain_identifier(domain: &str) -> String {
-    format!("{COMMENT_KEY_DOMAIN}{domain}")
-}
 
 #[derive(serde::Deserialize)]
 pub(super) struct APIError {
@@ -57,28 +52,6 @@ pub(super) struct DNSRecord {
     pub id: String,
 }
 
-impl DNSRecord {
-    pub(super) fn in_domain(&self, domain: &str) -> bool {
-        self.comment
-            .as_ref()
-            .is_some_and(|c| c.contains(&domain_identifier(domain)))
-    }
-
-    pub(super) fn set_domain(&mut self, domain: &str) {
-        let val = domain_identifier(domain);
-        match self.comment.as_mut() {
-            Some(comment) => {
-                // Remove any existing domain
-                if let Some(pos) = comment.find(COMMENT_KEY_DOMAIN) {
-                    let _ = comment.split_off(pos);
-                }
-                comment.push_str(&val);
-            }
-            None => self.comment = Some(format!("{COMMENT_WATERMARK} {}", val)),
-        };
-    }
-}
-
 impl Manage for DNSRecord {
     fn is_managed(&self) -> bool {
         self.comment
@@ -114,6 +87,7 @@ impl From<DNSRecord> for Record {
             kind: value.kind.to_uppercase(),
             name: url::Host::Domain(value.name),
             content: value.content,
+            source: super::FRONTEND_NAME.to_string(),
         }
     }
 }
