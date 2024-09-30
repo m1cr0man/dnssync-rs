@@ -158,8 +158,8 @@ impl Cloudflare {
 }
 
 impl common::Frontend for Cloudflare {
-    fn get_domain(&self) -> String {
-        return self.domain.to_owned();
+    fn get_domain(&self) -> &str {
+        return &self.domain;
     }
 
     fn set_records(&mut self, authority: Vec<Record>, dry_run: bool) -> Result<()> {

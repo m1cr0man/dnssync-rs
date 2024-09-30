@@ -63,7 +63,7 @@ impl DNSSync {
                 .frontends
                 .iter()
                 .enumerate()
-                .find(|(_, fe)| domain.ends_with(&fe.get_domain()))
+                .find(|(_, fe)| domain.ends_with(fe.get_domain()))
             {
                 Some((i, _)) => {
                     // Extend an entry in the authority map

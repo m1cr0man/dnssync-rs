@@ -7,15 +7,10 @@ use crate::common::{self, BackendSnafu, Record, Result};
 pub const BACKEND_NAME: &str = "JSONFile";
 
 pub struct Backend {
-    domain: String,
     source: PathBuf,
 }
 
 impl common::Backend for Backend {
-    fn get_domain(&self) -> String {
-        return self.domain.to_owned();
-    }
-
     fn read_records(&self) -> Result<Vec<Record>> {
         let file = File::open(&self.source)
             .boxed_local()
@@ -50,7 +45,6 @@ impl common::Backend for Backend {
 impl From<super::Config> for Backend {
     fn from(value: super::Config) -> Self {
         Self {
-            domain: value.domain,
             source: value.source,
         }
     }

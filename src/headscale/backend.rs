@@ -53,10 +53,6 @@ impl Backend {
 }
 
 impl common::Backend for Backend {
-    fn get_domain(&self) -> String {
-        return self.domain.to_owned();
-    }
-
     fn read_records(&self) -> Result<Vec<Record>> {
         tracing::debug!(
             url = self.machines_url.as_str(),
