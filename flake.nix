@@ -85,13 +85,14 @@
             };
           };
 
+          imports = [
+            "${self}/src/cloudflare/default.nix"
+            "${self}/src/headscale/default.nix"
+            "${self}/src/jsonfile/default.nix"
+            "${self}/src/machinectl/default.nix"
+          ];
+
           config = lib.mkIf cfg.enable {
-            imports = [
-              "${self}/src/cloudflare/default.nix"
-              "${self}/src/headscale/default.nix"
-              "${self}/src/jsonfile/default.nix"
-              "${self}/src/machinectl/default.nix"
-            ];
 
             users.users.dnssync = {
               group = "dnssync";
@@ -102,7 +103,7 @@
             users.groups.dnssync = { };
 
             systemd.services.dnssync = {
-              inherit (self) description;
+              description = "Dynamic DNS for services and networks";
               after = [ "network-online.target" ];
               wantedBy = [ "multi-user.target" ];
               serviceConfig = {

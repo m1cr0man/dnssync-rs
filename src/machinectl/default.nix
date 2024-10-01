@@ -25,15 +25,17 @@ in
 
   config = lib.mkIf (cfg.enable) {
     dnssync.backends = "machinectl";
-    # Not explicitly adding systemd to the path, but if needed use config.systemd.package.
-    # It should be present by default.
-    # Run when machines.target is reached
-    after = [ "machines.target" ];
-    wantedBy = [ "machines.target" ];
-    systemd.services.dnssync.environment = {
-      "DNSSYNC_MACHINECTL_DOMAIN" = cfg.domain;
-      "DNSSYNC_MACHINECTL_EXCLUDED_CIDRS" = builtins.concatStringsSep "," cfg.excludedCidrs;
-      "DNSSYNC_MACHINECTL_INCLUDED_CIDRS" = builtins.concatStringsSep "," cfg.includedCidrs;
+    systemd.services.dnssync = {
+      # Not explicitly adding systemd to the path, but if needed use config.systemd.package.
+      # It should be present by default.
+      # Run when machines.target is reached
+      after = [ "machines.target" ];
+      wantedBy = [ "machines.target" ];
+      environment = {
+        "DNSSYNC_MACHINECTL_DOMAIN" = cfg.domain;
+        "DNSSYNC_MACHINECTL_EXCLUDED_CIDRS" = builtins.concatStringsSep "," cfg.excludedCidrs;
+        "DNSSYNC_MACHINECTL_INCLUDED_CIDRS" = builtins.concatStringsSep "," cfg.includedCidrs;
+      };
     };
   };
 }
