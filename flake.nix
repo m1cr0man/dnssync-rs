@@ -67,11 +67,21 @@
             enable = lib.mkEnableOption "dynamic DNS for services and networks";
             backends = mkOption {
               type = types.commas;
+              default = "";
+              visible = false;
               description = "Enabled backend implementations, comma separated";
             };
             frontends = mkOption {
               type = types.commas;
+              default = "";
+              visible = false;
               description = "Enabled frontend implementations, comma separated";
+            };
+            extraArgs = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              example = [ "--dry-run" ];
+              description = "Extra arguments to pass to invokation";
             };
           };
 
@@ -96,7 +106,13 @@
               after = [ "network-online.target" ];
               wantedBy = [ "multi-user.target" ];
               serviceConfig = {
-                ExecStart = "${pkgs.dnssync-rs}/bin/dnssync-rs --backends ${esa cfg.backends} --frontends ${esa cfg.frontends}";
+                ExecStart = lib.escapeShellArgs ([
+                  "${pkgs.dnssync-rs}/bin/dnssync-rs"
+                  "--backends"
+                  cfg.backends
+                  "--frontends"
+                  cfg.frontends
+                ] ++ cfg.extraArgs);
                 Type = "oneshot";
                 RemainAfterExit = "no";
                 User = "dnssync";

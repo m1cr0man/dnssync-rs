@@ -10,7 +10,8 @@ pub const BACKEND_NAME: &str = "Machinectl";
 
 pub struct Machinectl {
     domain: String,
-    ignored_cidrs: Vec<cidr::IpCidr>,
+    excluded_cidrs: Vec<cidr::IpCidr>,
+    included_cidrs: Vec<cidr::IpCidr>,
 }
 
 impl Machinectl {
@@ -24,10 +25,21 @@ impl Machinectl {
                     message: format!("Failed to parse ip {}", ip),
                 })?;
 
+            // Skip not-included.
+            if self.included_cidrs.len() > 0
+                && !self
+                    .included_cidrs
+                    .iter()
+                    .any(|included_cidr| included_cidr.contains(&ip_addr))
+            {
+                continue;
+            }
+
+            // Skip excluded. Empty vec handled implicitly.
             if self
-                .ignored_cidrs
+                .excluded_cidrs
                 .iter()
-                .any(|ignored_cidr| ignored_cidr.contains(&ip_addr))
+                .any(|excluded_cidr| excluded_cidr.contains(&ip_addr))
             {
                 continue;
             }
@@ -88,27 +100,38 @@ impl common::Backend for Machinectl {
     }
 }
 
+fn convert_cidrs(cidrs_opt: Option<String>) -> Vec<cidr::IpCidr> {
+    cidrs_opt
+        .unwrap_or_default()
+        .split(",")
+        .filter_map(|cidr| {
+            // Gracefully handle null strings
+            if cidr.trim().len() == 0 {
+                return None;
+            }
+            Some(
+                cidr::IpCidr::from_str(cidr.trim())
+                    .map_err(|err| {
+                        ConfigSnafu {
+                            message: format!("Invalid CIDR {cidr}: {err}"),
+                            prefix: "machinectl",
+                        }
+                        .build()
+                    })
+                    .unwrap(),
+            )
+        })
+        .collect()
+}
+
 impl From<super::Config> for Machinectl {
     fn from(value: super::Config) -> Self {
         // Unfortunately config-rs makes it difficult to mix
         // strings and vec of strings, so we have to parse ourselves
         Self {
             domain: value.domain,
-            ignored_cidrs: value
-                .ignored_cidrs
-                .split(",")
-                .map(|v| {
-                    cidr::IpCidr::from_str(v.trim())
-                        .map_err(|_| {
-                            ConfigSnafu {
-                                message: format!("Invalid CIDR {v}"),
-                                prefix: "machinectl.ignored_cidrs",
-                            }
-                            .build()
-                        })
-                        .unwrap()
-                })
-                .collect(),
+            excluded_cidrs: convert_cidrs(value.excluded_cidrs),
+            included_cidrs: convert_cidrs(value.included_cidrs),
         }
     }
 }
