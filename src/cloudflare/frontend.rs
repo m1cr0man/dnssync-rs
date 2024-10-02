@@ -52,6 +52,7 @@ fn process_errors(success: bool, errors: Vec<APIError>) -> Result<()> {
 pub struct Cloudflare {
     api_key: String,
     domain: String,
+    instance_id: String,
     zone_id: Option<String>,
 }
 
@@ -198,6 +199,18 @@ impl common::Frontend for Cloudflare {
         // Write each collection of records.
         // Deletes first - to avoid any key/unique errors.
         for record in diff.delete {
+            if record.get_instance_id().ne(&Some(&self.instance_id)) {
+                tracing::debug!(
+                    frontend = FRONTEND_NAME,
+                    kind = record.kind,
+                    name = record.name,
+                    record_id = record.id,
+                    "Skipping delete: Record not managed by this instance",
+                );
+
+                continue;
+            }
+
             tracing::info!(
                 frontend = FRONTEND_NAME,
                 kind = record.kind,
@@ -221,7 +234,7 @@ impl common::Frontend for Cloudflare {
             );
         }
 
-        for record in diff.update {
+        for mut record in diff.update {
             tracing::info!(
                 frontend = FRONTEND_NAME,
                 name = record.name,
@@ -230,6 +243,18 @@ impl common::Frontend for Cloudflare {
                 record_id = record.id,
                 "Updating record"
             );
+
+            if record.get_instance_id().ne(&Some(&self.instance_id)) {
+                tracing::warn!(
+                    frontend = FRONTEND_NAME,
+                    name = record.name,
+                    kind = record.kind,
+                    content = record.content,
+                    record_id = record.id,
+                    "Record is not managed by this instance but we will update anyway"
+                )
+            }
+            record.set_instance_id(&self.instance_id);
 
             let resp: DNSRecord = self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records/{}", record.id),
@@ -246,7 +271,7 @@ impl common::Frontend for Cloudflare {
             );
         }
 
-        for record in diff.create {
+        for mut record in diff.create {
             tracing::info!(
                 frontend = FRONTEND_NAME,
                 name = record.name,
@@ -254,6 +279,7 @@ impl common::Frontend for Cloudflare {
                 content = record.content,
                 "Creating record"
             );
+            record.set_instance_id(&self.instance_id);
 
             let resp: DNSRecord = self.api_write(
                 &format!("{API_BASE_URL}/zones/{zone_id}/dns_records"),
@@ -281,6 +307,7 @@ impl From<super::Config> for Cloudflare {
         Self {
             api_key,
             domain: value.domain,
+            instance_id: value.instance_id,
             zone_id: None,
         }
     }

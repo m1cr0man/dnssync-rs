@@ -1,6 +1,7 @@
 use crate::common::{Manage, Match, Record, Update};
 
-pub(super) const COMMENT_WATERMARK: &str = "Managed by DNSSync.";
+pub(super) const COMMENT_WATERMARK: &str = "Managed by DNSSync";
+pub(super) const COMMENT_INSTANCE_PREFIX: &str = "instance:";
 
 #[derive(serde::Deserialize)]
 pub(super) struct APIError {
@@ -50,6 +51,23 @@ pub(super) struct DNSRecord {
     // id is used to construct the URL, not part of the body.
     #[serde(skip_serializing)]
     pub id: String,
+}
+
+impl DNSRecord {
+    pub(super) fn get_instance_id(&self) -> Option<&str> {
+        self.comment.as_ref().and_then(|comment| {
+            comment.find(COMMENT_INSTANCE_PREFIX).and_then(|pos| {
+                let (_, instance_id) = comment.split_at(pos + COMMENT_INSTANCE_PREFIX.len());
+                Some(instance_id.trim())
+            })
+        })
+    }
+
+    pub(super) fn set_instance_id(&mut self, instance_id: &str) {
+        self.comment = Some(format!(
+            "{COMMENT_WATERMARK} {COMMENT_INSTANCE_PREFIX}{instance_id}"
+        ));
+    }
 }
 
 impl Manage for DNSRecord {

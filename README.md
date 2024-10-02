@@ -2,4 +2,5 @@
 
 ## TODO
 
+- Add flag for instance id
 - Documentation
