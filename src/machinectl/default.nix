@@ -1,11 +1,11 @@
 { config, lib, pkgs, ... }:
 let
   inherit (lib) types mkOption;
-  cfg = config.dnssync.backend.machinectl;
+  cfg = config.dnssync.backends.machinectl;
   cidrs = builtins.map lib.escapeShellArg cfg.excludedCidrs;
 in
 {
-  options.dnssync.backend.machinectl = {
+  options.dnssync.backends.machinectl = {
     enable = lib.mkEnableOption "Systemd Machined source of records";
     domain = mkOption {
       type = types.str;
@@ -24,7 +24,7 @@ in
   };
 
   config = lib.mkIf (cfg.enable) {
-    dnssync.backends = "machinectl";
+    dnssync.enabledBackends = "machinectl";
     systemd.services.dnssync = {
       # Not explicitly adding systemd to the path, but if needed use config.systemd.package.
       # It should be present by default.

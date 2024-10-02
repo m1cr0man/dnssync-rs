@@ -1,10 +1,10 @@
 { config, lib, ... }:
 let
   inherit (lib) types mkOption;
-  cfg = config.dnssync.frontend.cloudflare;
+  cfg = config.dnssync.frontends.cloudflare;
 in
 {
-  options.dnssync.frontend.cloudflare = {
+  options.dnssync.frontends.cloudflare = {
     enable = lib.mkEnableOption "cloudflare server frontend for records";
     domain = mkOption {
       type = types.str;
@@ -22,7 +22,7 @@ in
   };
 
   config = lib.mkIf (cfg.enable) {
-    dnssync.frontends = "cloudflare";
+    dnssync.enabledFrontends = "cloudflare";
     systemd.services.dnssync.requires = [ "network-online.target" ];
     systemd.services.dnssync.environment = {
       "DNSSYNC_CLOUDFLARE_DOMAIN" = cfg.domain;

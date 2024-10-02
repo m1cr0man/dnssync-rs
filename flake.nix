@@ -65,13 +65,13 @@
         {
           options.dnssync = {
             enable = lib.mkEnableOption "dynamic DNS for services and networks";
-            backends = mkOption {
+            enabledBackends = mkOption {
               type = types.commas;
               default = "";
               visible = false;
               description = "Enabled backend implementations, comma separated";
             };
-            frontends = mkOption {
+            enabledFrontends = mkOption {
               type = types.commas;
               default = "";
               visible = false;
@@ -110,9 +110,9 @@
                 ExecStart = lib.escapeShellArgs ([
                   "${pkgs.dnssync-rs}/bin/dnssync-rs"
                   "--backends"
-                  cfg.backends
+                  cfg.enabledBackends
                   "--frontends"
-                  cfg.frontends
+                  cfg.enabledFrontends
                 ] ++ cfg.extraArgs);
                 Type = "oneshot";
                 RemainAfterExit = "no";
@@ -124,6 +124,13 @@
             };
           };
         };
+
+      nixosModule.dnssync-with-overlay = {
+        imports = [
+          self.nixosModules.dnssync
+        ];
+        nixpkgs.overlays = [ self.overlays.dnssync-rs-nixpkgs ];
+      };
     } //
     (flake-utils.lib.eachDefaultSystem (system:
       let

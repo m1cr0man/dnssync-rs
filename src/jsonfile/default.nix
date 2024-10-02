@@ -1,10 +1,10 @@
 { config, lib, ... }:
 let
   inherit (lib) types mkOption;
-  cfg = config.dnssync.backend.jsonfile;
+  cfg = config.dnssync.backends.jsonfile;
 in
 {
-  options.dnssync.backend.jsonfile = {
+  options.dnssync.backends.jsonfile = {
     enable = lib.mkEnableOption "JSON file source of records";
     source = mkOption {
       type = types.path;
@@ -13,7 +13,7 @@ in
   };
 
   config = lib.mkIf (cfg.enable) {
-    dnssync.backends = "jsonfile";
+    dnssync.enabledBackends = "jsonfile";
     systemd.services.dnssync.environment = {
       "DNSSYNC_JSONFILE_SOURCE" = cfg.source;
     };

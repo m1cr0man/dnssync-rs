@@ -1,10 +1,10 @@
 { config, lib, ... }:
 let
   inherit (lib) types mkOption;
-  cfg = config.dnssync.backend.headscale;
+  cfg = config.dnssync.backends.headscale;
 in
 {
-  options.dnssync.backend.headscale = {
+  options.dnssync.backends.headscale = {
     enable = lib.mkEnableOption "Headscale server source of records";
     domain = mkOption {
       type = types.str;
@@ -22,7 +22,7 @@ in
   };
 
   config = lib.mkIf (cfg.enable) {
-    dnssync.backends = "headscale";
+    dnssync.enabledBackends = "headscale";
     systemd.services.dnssync.environment = {
       "DNSSYNC_HEADSCALE_DOMAIN" = cfg.domain;
       "DNSSYNC_HEADSCALE_API_KEY" = "@${cfg.keyFile}";
