@@ -13,10 +13,11 @@ and writes them to 1 or more frontends. A quick summary of features/use cases:
 - Support on frontend for both managed and unmanaged record mixing.
 - Supports multiple running instances of DNSSync.
 - Supports nested and overlapping domains and subdomains.
+- Architected to be useful as a library as well as a CLI.
 
 ## Configuration
 
-### NixOS quick start
+### NixOS flake quick start
 
 DNSSync was built to be used in NixOS. You can use the module exported from
 this repo's flake in your own configuration quite easily. The below snippet
@@ -70,6 +71,15 @@ showing the important pieces.
 }
 ```
 
+### Nix quick start
+
+If you are just using Nix as a package manager, you can quickly compile and
+launch DNSSync using this command:
+
+```bash
+nix run github:m1cr0man/dnssync-rs -- --help
+```
+
 ### Other distributions
 
 DNSSync is configured through environment variables and CLI args. Check out
@@ -81,6 +91,8 @@ prefixing it with an `@` symbol. DNSSync will read this file at runtime.
 Here's some example invocations:
 
 ```bash
+# Compile with cargo
+cargo build . -F cli
 # Test your configuration
 $ dnssync --backends headscale,machinectl,jsonfile --frontends cloudflare --test
 # Dry run the changes
@@ -88,3 +100,17 @@ $ dnssync --backends headscale,machinectl,jsonfile --frontends cloudflare --dry-
 # Do DNS Sync!
 $ dnssync --backends headscale,machinectl,jsonfile --frontends cloudflare
 ```
+
+## Development
+
+This project uses Nix to manage the development environment.
+Run `nix develop` for a shell with the Rust toolchain ready to go.
+
+### Adding a frontend or backend
+
+- Create a subdirectory under [src](./src/).
+- Create a struct and implement either the Frontend or Backend
+ trait from [common](./src/common/models.rs).
+- Extend [config.rs](./src/config.rs) to load the configuration for your struct.
+- Add a `default.nix` with the Nix options and config for the struct.
+- Import the Nix module in the [flake.nix](./flake.nix#92).
