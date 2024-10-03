@@ -61,6 +61,7 @@
           inherit (lib) types mkOption;
           cfg = config.dnssync;
           esa = lib.escapeShellArg;
+          description = "Dynamic DNS for services and networks";
         in
         {
           options.dnssync = {
@@ -83,6 +84,12 @@
               example = [ "--dry-run" ];
               description = "Extra arguments to pass to invokation";
             };
+            timerFrequency = mkOption {
+              type = types.str;
+              default = "minutely";
+              example = "*:00/10";
+              description = "The frequency to run the sync script, in systemd.time(5) notation";
+            };
           };
 
           imports = [
@@ -93,7 +100,6 @@
           ];
 
           config = lib.mkIf cfg.enable {
-
             users.users.dnssync = {
               group = "dnssync";
               home = "/var/empty";
@@ -103,7 +109,7 @@
             users.groups.dnssync = { };
 
             systemd.services.dnssync = {
-              description = "Dynamic DNS for services and networks";
+              inherit description;
               after = [ "network-online.target" ];
               wantedBy = [ "multi-user.target" ];
               serviceConfig = {
@@ -122,6 +128,12 @@
                 PrivateTmp = "yes";
               };
             };
+
+            systemd.timers.dnssync = {
+              inherit description;
+              wantedBy = [ "timers.target" ];
+              timerConfig.OnCalendar = cfg.timerFrequency;
+            };
           };
         };
 
@@ -131,6 +143,7 @@
         ];
         nixpkgs.overlays = [ self.overlays.dnssync-rs-nixpkgs ];
       };
+
     } //
     (flake-utils.lib.eachDefaultSystem (system:
       let
