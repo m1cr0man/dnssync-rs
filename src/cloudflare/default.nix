@@ -27,7 +27,7 @@ in
     systemd.services.dnssync.environment = {
       "DNSSYNC_CLOUDFLARE_DOMAIN" = cfg.domain;
       "DNSSYNC_CLOUDFLARE_INSTANCE_ID" = cfg.instanceId;
-      "DNSSYNC_CLOUDFLARE_API_KEY" = "@${cfg.instanceId}";
+      "DNSSYNC_CLOUDFLARE_API_KEY" = "@${cfg.keyFile}";
     };
   };
 }
