@@ -169,8 +169,16 @@ impl common::Frontend for Cloudflare {
         let current = self.read_records(zone_id.clone())?;
         let diff = diff_records::<DNSRecord>(current, authority);
 
+        // Evaluate deletions more precisely based on instance ID
+        let diff_len = diff.len() - diff.delete.len();
+        let deletions: Vec<DNSRecord> = diff
+            .delete
+            .into_iter()
+            .filter(|record| record.get_instance_id().eq(&Some(&self.instance_id)))
+            .collect();
+        let diff_len = diff_len + deletions.len();
+
         // Short circuit on no changes
-        let diff_len = diff.len();
         if diff_len == 0 {
             tracing::info!(frontend = FRONTEND_NAME, "No changes detected",);
             return Ok(());
@@ -182,7 +190,7 @@ impl common::Frontend for Cloudflare {
                 frontend = FRONTEND_NAME,
                 create = diff.create.len(),
                 update = diff.update.len(),
-                delete = diff.delete.len(),
+                delete = deletions.len(),
                 "Dry run completed",
             );
             return Ok(());
@@ -192,25 +200,13 @@ impl common::Frontend for Cloudflare {
             frontend = FRONTEND_NAME,
             create = diff.create.len(),
             update = diff.update.len(),
-            delete = diff.delete.len(),
+            delete = deletions.len(),
             "Applying changes",
         );
 
         // Write each collection of records.
         // Deletes first - to avoid any key/unique errors.
-        for record in diff.delete {
-            if record.get_instance_id().ne(&Some(&self.instance_id)) {
-                tracing::debug!(
-                    frontend = FRONTEND_NAME,
-                    kind = record.kind,
-                    name = record.name,
-                    record_id = record.id,
-                    "Skipping delete: Record not managed by this instance",
-                );
-
-                continue;
-            }
-
+        for record in deletions {
             tracing::info!(
                 frontend = FRONTEND_NAME,
                 kind = record.kind,
