@@ -1,10 +1,10 @@
 #[derive(serde::Deserialize)]
-pub(super) struct MachinesResponse {
-    pub machines: Vec<Machine>,
+pub(super) struct NodesResponse {
+    pub nodes: Vec<Node>,
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct Machine {
+pub(super) struct Node {
     pub user: UserData,
     #[serde(rename = "givenName")]
     pub given_name: String,
