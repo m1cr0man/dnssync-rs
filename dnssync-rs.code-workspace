@@ -36,21 +36,24 @@
 				"name": "Debug executable 'dnssync-rs'",
 				"cargo": {
 					"args": [
-						"-Z",
-						"unstable-options",
-						"-C",
-						"${workspaceFolder}",
 						"build",
+						"-F",
+						"cli",
 						"--bin=dnssync-rs",
 						"--package=dnssync-rs"
 					],
 					"filter": {
 						"name": "dnssync-rs",
 						"kind": "bin"
-					}
+					},
+					"cwd": "${workspaceFolder}",
 				},
 				"args": [
-					"--dry-run"
+					"--dry-run",
+					"--backends",
+					"headscale,machinectl",
+					"--frontends",
+					"cloudflare"
 				],
 				"envFile": "config.env",
 				"cwd": "${workspaceFolder}"
