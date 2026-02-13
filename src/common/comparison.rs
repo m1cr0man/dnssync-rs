@@ -22,6 +22,10 @@ pub(crate) fn diff_records<R: Clone + Manage + Match + Update + PartialEq + From
 
     authority.clone().into_iter().for_each(|record| {
         let record_conv: R = record.clone().into();
+        // Check for and skip exact matches
+        if current.iter().any(|r| r == &record_conv) {
+            return;
+        }
         match current.iter().find(|r| r.matches(&record_conv)) {
             Some(existing) => {
                 // Check for existing unmanaged record
