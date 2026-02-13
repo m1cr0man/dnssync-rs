@@ -2,8 +2,8 @@ use serde::de::DeserializeOwned;
 use snafu::prelude::*;
 
 use crate::common::{
-    self, diff_records, key_file_or_string, FrontendSnafu, Record, RequestSnafu, ResponseSnafu,
-    Result,
+    self, diff_records, key_file_or_string, Error, FrontendSnafu, Record, RequestSnafu,
+    ResponseSnafu, Result,
 };
 
 use super::models::{APIError, DNSRecord, DeleteResponse, PaginatedResponse, WriteResponse, Zone};
@@ -117,7 +117,21 @@ impl Cloudflare {
         let resp: WriteResponse<T> = self
             .with_headers(req)
             .send_json(body)
-            .context(RequestSnafu { url, method })?
+            .map_err(|err| {
+                // Check if the error is an actual HTTP status error (4xx/5xx)
+                let response_body = if let Some(resp) = err.into_response() {
+                    // into_string() reads the body. We use ok() because we
+                    // don't want to crash if the body isn't valid UTF-8.
+                    resp.into_string().unwrap_or("No body".to_string())
+                } else {
+                    "No body".to_string()
+                };
+
+                // Construct the SNAFU error manually
+                Error::ResponseError {
+                    message: format!("{} {} failed: {}", method.to_string(), url, response_body),
+                }
+            })?
             .into_json()
             .boxed_local()
             .context(FrontendSnafu {
