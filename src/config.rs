@@ -107,7 +107,7 @@ fn parse_config<'a, T: serde::Deserialize<'a>>(prefix: &str) -> crate::common::R
     let cfg_source = config::Config::builder()
         .add_source(
             config::Environment::with_prefix(prefix)
-                .convert_case(config::Case::ScreamingSnake)
+                .convert_case(config::Case::Snake)
                 .try_parsing(true),
         )
         .build()

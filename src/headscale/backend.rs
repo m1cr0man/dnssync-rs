@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use crate::common::{
     self, key_file_or_string, BackendSnafu, Record, RequestSnafu, Result, RECORD_KIND_A,
@@ -11,6 +11,7 @@ use snafu::ResultExt;
 pub const BACKEND_NAME: &str = "Headscale";
 
 pub struct Backend {
+    agent: ureq::Agent,
     domain: String,
     add_user_suffix: bool,
     api_key: String,
@@ -61,19 +62,24 @@ impl common::Backend for Backend {
             backend = "headscale",
             "Sending request"
         );
-        let response: NodesResponse = ureq::get(self.nodes_url.as_str())
-            .set("Authorization", &format!("Bearer {}", self.api_key))
+        let mut res = self
+            .agent
+            .get(self.nodes_url.as_str())
+            .header("Authorization", format!("Bearer {}", self.api_key))
             .call()
             .context(RequestSnafu {
                 url: self.nodes_url.as_str(),
                 method: "GET",
-            })?
-            .into_json()
-            .boxed_local()
-            .context(BackendSnafu {
-                backend: BACKEND_NAME,
-                message: "Failed to deserialize response",
             })?;
+
+        let response: NodesResponse =
+            res.body_mut()
+                .read_json()
+                .boxed_local()
+                .context(BackendSnafu {
+                    backend: BACKEND_NAME,
+                    message: "Failed to deserialize response",
+                })?;
 
         let mut records = Vec::new();
         for node in response.nodes {
@@ -100,7 +106,12 @@ impl From<super::Config> for Backend {
 
         let api_key = key_file_or_string(value.api_key, BACKEND_NAME.into()).unwrap();
 
+        let config = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(10)))
+            .build();
+
         Self {
+            agent: config.into(),
             domain: value.domain,
             add_user_suffix: value.add_user_suffix,
             api_key,

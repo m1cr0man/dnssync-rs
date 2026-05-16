@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::de::DeserializeOwned;
 use snafu::prelude::*;
 
@@ -50,6 +52,7 @@ fn process_errors(success: bool, errors: Vec<APIError>) -> Result<()> {
 }
 
 pub struct Cloudflare {
+    agent: ureq::Agent,
     api_key: String,
     domain: String,
     instance_id: String,
@@ -57,9 +60,9 @@ pub struct Cloudflare {
 }
 
 impl Cloudflare {
-    fn with_headers(&self, req: ureq::Request) -> ureq::Request {
-        req.set("Authorization", &format!("Bearer {}", self.api_key))
-            .set("Content-Type", "application/json; charset=utf8")
+    fn with_headers<T>(&self, req: ureq::RequestBuilder<T>) -> ureq::RequestBuilder<T> {
+        req.header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json; charset=utf8")
     }
 
     fn api_get_paginated<T: DeserializeOwned>(&self, url: &str, per_page: usize) -> Result<Vec<T>> {
@@ -72,21 +75,24 @@ impl Cloudflare {
                 frontend = "cloudflare",
                 "Sending request"
             );
-            let mut resp: PaginatedResponse<T> = self
-                .with_headers(ureq::get(url))
+            let mut res = self
+                .with_headers(self.agent.get(url))
                 .query("page", &page.to_string())
                 .query("per_page", &per_page.to_string())
                 .call()
                 .context(RequestSnafu {
                     url,
                     method: "Read",
-                })?
-                .into_json()
-                .boxed_local()
-                .context(FrontendSnafu {
-                    frontend: FRONTEND_NAME,
-                    message: "Failed to deserialize response",
                 })?;
+
+            let mut resp: PaginatedResponse<T> =
+                res.body_mut()
+                    .read_json()
+                    .boxed_local()
+                    .context(FrontendSnafu {
+                        frontend: FRONTEND_NAME,
+                        message: "Failed to deserialize response",
+                    })?;
 
             process_errors(resp.success, resp.errors)?;
 
@@ -109,35 +115,35 @@ impl Cloudflare {
         method: WriteMethod,
         body: impl serde::Serialize,
     ) -> Result<T> {
-        let req = match method {
-            WriteMethod::Create => ureq::post(url),
-            WriteMethod::Delete => ureq::delete(url),
-            WriteMethod::Update => ureq::put(url),
-        };
-        let resp: WriteResponse<T> = self
-            .with_headers(req)
-            .send_json(body)
-            .map_err(|err| {
-                // Check if the error is an actual HTTP status error (4xx/5xx)
-                let response_body = if let Some(resp) = err.into_response() {
-                    // into_string() reads the body. We use ok() because we
-                    // don't want to crash if the body isn't valid UTF-8.
-                    resp.into_string().unwrap_or("No body".to_string())
-                } else {
-                    "No body".to_string()
-                };
+        let mut res = match method {
+            WriteMethod::Create => self.with_headers(self.agent.post(url)).send_json(body),
+            WriteMethod::Delete => self.with_headers(self.agent.delete(url)).call(),
+            WriteMethod::Update => self.with_headers(self.agent.put(url)).send_json(body),
+        }
+        .context(RequestSnafu {
+            url,
+            method: method.to_string(),
+        })?;
 
-                // Construct the SNAFU error manually
-                Error::ResponseError {
-                    message: format!("{} {} failed: {}", method.to_string(), url, response_body),
-                }
-            })?
-            .into_json()
-            .boxed_local()
-            .context(FrontendSnafu {
-                frontend: FRONTEND_NAME,
-                message: "Failed to deserialize response",
-            })?;
+        if !res.status().is_success() {
+            let response_body = res
+                .body_mut()
+                .read_to_string()
+                .unwrap_or_else(|_| "No body".to_string());
+
+            return Err(Error::ResponseError {
+                message: format!("{} {} failed: {}", method.to_string(), url, response_body),
+            });
+        }
+
+        let resp: WriteResponse<T> =
+            res.body_mut()
+                .read_json()
+                .boxed_local()
+                .context(FrontendSnafu {
+                    frontend: FRONTEND_NAME,
+                    message: "Failed to deserialize response",
+                })?;
 
         process_errors(resp.success, resp.errors)?;
 
@@ -314,7 +320,12 @@ impl From<super::Config> for Cloudflare {
     fn from(value: super::Config) -> Self {
         let api_key = key_file_or_string(value.api_key, FRONTEND_NAME.into()).unwrap();
 
+        let config = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(10)))
+            .build();
+
         Self {
+            agent: config.into(),
             api_key,
             domain: value.domain,
             instance_id: value.instance_id,

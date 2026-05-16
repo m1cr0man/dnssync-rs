@@ -7,7 +7,6 @@
 
     crane = {
       url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "fenix/nixpkgs";
     };
 
     fenix = {
@@ -157,15 +156,17 @@
           PKG_CONFIG = "${pkgs.pkg-config}/bin/pkg-config";
         };
 
-        stdenv =
-          if pkgs.stdenv.isLinux then
-            pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
+        stdenv = p:
+          if p.stdenv.isLinux then
+            p.stdenvAdapters.useMoldLinker p.stdenv
           else
-            pkgs.stdenv;
+            p.stdenv;
 
         inherit (pkgs) lib;
 
-        craneLib = crane.mkLib pkgs;
+        craneLib = (crane.mkLib pkgs).overrideScope (final: prev: {
+          stdenvSelector = stdenv;
+        });
         src = craneLib.cleanCargoSource ./.;
 
         mkToolchain = fenix.packages.${system}.combine;
@@ -195,7 +196,7 @@
 
         # Common arguments can be set here to avoid repeating them later
         commonArgs = {
-          inherit src stdenv;
+          inherit src;
           strictDeps = true;
 
           buildInputs = [
@@ -278,7 +279,7 @@
             inherit cargoArtifacts;
           });
           devTools = pkgs.linkFarm "vscode-dev-tools" {
-            inherit (pkgs) nixpkgs-fmt rnix-lsp gcc pkg-config;
+            inherit (pkgs) nixpkgs-fmt gcc pkg-config;
             openssl = pkgs.openssl.dev;
             rust = devToolchain;
           };
